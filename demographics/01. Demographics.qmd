@@ -1,0 +1,189 @@
+---
+title: "Demographics of patients proned in UHG"
+author: "David M Hannon"
+format: 
+  pdf:
+    documentclass: article
+    papersize: a4
+    linestretch: 1.15
+    mainfont: 'Lora'
+    sansfont: 'Lora'
+    fontsize: 8pt
+    toc: false
+    number-sections: false
+    geometry: 
+    - top=30mm
+    - bottom=40mm
+    - left=30mm
+    - right=30mm
+editor: 
+  markdown: 
+    wrap: 72
+bibliography: references.bib
+csl: american-medical-association.csl
+---
+
+```{r setup}
+#| echo: false
+#| output: false
+
+set.seed(103)
+library(tidyverse)
+library(gt)
+library(gtsummary)
+library(webshot2)   # needed to save images of gt tables
+library(readxl)
+library(DataExplorer)
+library(janitor)
+```
+
+## Introduction
+
+This chapter outlines a description of the demographics of the population involved in this study. It includes patients:
+
+-   admitted to the Intensive Care Unit (ICU) of University Hospital Galway (UHG) between 14/07/2013 and 20/03/2022.
+-   underwent invasive ventilation.
+-   were placed in the prone position due to poor respiratory function at least one time.
+
+```{r}
+#| include: false
+setwd('~/Documents/02. Medicine/04. MD/Strand 03 - ML/md-work-on-ml-for-proning/demographics')
+load(file = 'demographics.Rda')
+```
+
+
+## Description and summary
+
+There are a total of `r nrow(demo_raw)` patients identified who fulfill the above criteria. In the summary table below, the patients have been divided into categories based on the broad aetiology of their ARDS. These are:
+
+-   ARDSp = ARDS caused by a pulmonary pathology (e.g. bacterial pneumonia)
+-   ARDSexp = ARDS caused by an extra-pulmonary pathology (e.g. systemic sepsis)
+-   Covid-19 = ARDS secondary to severe Covid-19
+-   Unknown = documentation as yet reviewed does not clearly identify cause
+
+Note that there are several missing values, as outlined below:
+
+-   Height (cm): a total of `r sum(is.na(demo_raw$height_cm))` values (`r round((sum(is.na(demo_raw$height_cm)) / nrow(demo_raw)) * 100, 1)`%) were not recorded
+-   Risk factor: a total of `r sum(is.na(demo_raw$ards_risk_factor))` values (`r round((sum(is.na(demo_raw$ards_risk_factor)) / nrow(demo_raw)) * 100, 1)`%) were not recorded
+-   Admitting location: a total of `r sum(is.na(demo_raw$adm_location))` values (`r round((sum(is.na(demo_raw$adm_location)) / nrow(demo_raw)) * 100, 1)`%) were not recorded
+
+This may have implications for any further calculations or applications that thgis data is used for.
+
+
+```{r demo_summ_table}
+#| echo: false
+#| warning: false
+
+theme_gtsummary_journal(journal = 'nejm')
+
+demo_raw %>% 
+  select(-c(patient_id,
+            pathogenic_factor,
+            adm_date,
+            dc_date_time,
+            ventilator)) %>% 
+  tbl_summary(by = ards_type,
+              statistic = list(all_continuous() ~ "{mean} ({sd})",
+                               all_categorical() ~ "{n} ({p}%)"),
+              label = list(gender ~ 'Gender',
+                           age_years ~ 'Age (years)',
+                           height_cm ~ 'Height (cm)',
+                           weight_kg ~ 'Weight (kg)',
+                           bmi ~ 'BMI',
+                           ards_risk_factor ~ 'Risk factor',
+                           adm_location ~ 'Admitting location',
+                           los_days ~ 'Length of stay (days)',
+                           apache_ii ~ 'Apache II score',
+                           total_proning_sessions ~ 'Proning sessions',
+                           outcome ~ 'Outcome'),
+              missing = 'ifany',
+              missing_text = 'Not recorded') %>% 
+  bold_labels() %>% 
+  add_overall() %>% 
+  as_gt() -> summ_demo
+
+gtsave(summ_demo, 'table_01.png')
+```
+
+See @fig-table01 for a summary of patient characteristics.
+
+![Demographics](table_01.png){#fig-table01}
+
+\newpage
+
+## Exploratory Data Analysis
+
+A crude set of summary statistics of the variables is below:
+
+```{r}
+#| echo: false
+
+demo_raw %>% 
+  select(-c(patient_id,
+            pathogenic_factor,
+            adm_date,
+            dc_date_time,
+            ventilator)) %>% 
+  summary()
+```
+
+We can get a sense of the distribution of the continuous variables:
+
+```{r}
+#| echo: false
+
+plot_histogram(data = demo_raw,
+               ncol = 2L,
+               geom_histogram_args = list(bins = 20),
+               ggtheme = theme_light())
+```
+
+In the above plots we can see there is a strong left skew to the distribution of patient `age` with a marked peak at approximately age 75. The distribution of `Apache II` scores appears more normally distributed but with a gentler right skew. `Height` appears more unusual. In general one would imagine that this variable would follow a somewhat normal distribution. If we exclude the outliers we can see strong peaks.This is likely due to the fact that patient height is often estimated rather than measured precisely in the ICU. `Length of stay` has a strong right skew due to the presence of a few patients who had prolonged stays in the unit. `Proning sessions` has a very strong right skew, with the median number of proning sessions being 3, but the maximum being 13. `Weight` appears to be normally distributed.
+
+The density of the distributions of those variables can also be examined.
+
+```{r}
+#| echo: false
+#| fig-cap: "Density plots of continuous demographic variables"
+#| fig-pos: 'h'
+
+plot_density(demo_raw, ncol = 2, ggtheme = theme_light())
+```
+
+A bimodal density is suggested for the age of the patients.
+
+\
+
+```{r}
+#| echo: false
+#| fig-cap: "Density plot divided by ARDS type"
+#| fig-pos: '!h'
+
+ggplot(demo_raw,
+       mapping = aes(x = age_years, col = ards_type)) +
+  geom_density()
+```
+
+By separating out the individual ARDS types we can see that this bimodal distribution is present in both patients with Covid-19 and with ARDSp.
+
+The normality of the variables can also be inspected with a series of QQ plots.
+
+```{r}
+#| echo: false
+#| warning: false
+
+plot_qq(demo_raw, ggtheme = theme_light())
+```
+
+\
+
+We can also begin to compare groups.
+
+```{r}
+#| echo: false
+#| warning: false
+
+plot_boxplot(data = demo_raw, by = 'ards_type', ncol = 2, parallel = T, ggtheme = theme_light())
+```
+
+
