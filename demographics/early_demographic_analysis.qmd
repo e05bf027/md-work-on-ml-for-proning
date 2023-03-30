@@ -185,5 +185,3 @@ We can also begin to compare groups.
 
 plot_boxplot(data = demo_raw, by = 'ards_type', ncol = 2, parallel = T, ggtheme = theme_light())
 ```
-
-
