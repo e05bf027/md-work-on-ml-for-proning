@@ -1,0 +1,296 @@
+---
+title: "Estimating the risk of death from prone positioning with the Gaussian Naive Bayes algorithm"
+author: "David M Hannon"
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    linestretch: 1.15
+    mainfont: 'Lora'
+    sansfont: 'Lora'
+    fontsize: 7pt
+    toc: false
+    number-sections: false
+    geometry: 
+    - top=30mm
+    - bottom=30mm
+    - left=30mm
+    - right=30mm
+editor: 
+  markdown: 
+    wrap: 72
+bibliography: references.bib
+csl: american-medical-association.csl
+---
+
+```{r setup}
+#| include: false
+
+rm(list = ls())
+library(recipes)
+library(rsample)
+library(tidyverse)
+library(yardstick)
+library(naivebayes)
+library(DataExplorer)
+set.seed(3.14)
+```
+
+# Overview
+
+This report outlines an initial attempt to quantify the risk of death
+that accompanies a patient's initial response to being placed in the
+prone position for respiratory distress using the Gaussian Naive Bayes
+algorithm.
+
+# Methods
+## Data extraction and wrangling
+### Extraction
+The data is gathered from Metavision, the EHR system used in the ICU of
+UHG using the 'Metavision Query Wizard'. The query designed for this
+particular purpose captured all verified data on the system in the areas
+of:
+
+-   patient positioning
+-   ventilator settings
+-   cardiovascular measurements
+-   arterial blood gas values
+-   haematology blood tests
+-   biochemical blood tests
+
+Data gathered from the Wizard can be logged as 'verified' or 'not
+verified'. 'Verified' data has been reviewed and approved. For most
+cardiovascular parameters, the nurse at the patient's bedside approves a
+set of readings every hour that are accurate. They also manually enter
+the ABG data (the point-of-care analysers are not connected to
+Metavision). Other blood tests are integrated directly into Metavision,
+having been verified in the hospital laboratory.
+
+### Wrangling
+The data for wrangling before analysis can proceed comes from the
+Metavision Query Wizard. In order to facilitate analysis, the data must
+be manipulated so that it forms a time-series where each row is a point
+in time and each column is a physiological or biochemical parameter
+recorded at that time. This concept is known as 'tidy
+data'[@wickham2014].
+
+The data output by the Query Wizard has a single column containing the
+name of all captured parameters and an adjacent column lists the
+corresponding value. The data must be both anonymised, and transformed
+to a 'tidy' format before analysis can proceed.
+
+A script has been written that achieves this goal with the following
+steps:
+
+1.  Choose correct .xls file from Metavision Query output files
+2.  Enter basic demographic details manually
+3.  Import and pivot the patient data table
+4.  Coerce data to useful formats
+5.  Partition the data into useful groups
+6.  Save output .xlsx files
+
+The details of this script can be viewed in the separate file
+`06_wrangle_script.R`.
+
+### Resulting dataframe
+The result of this process produces a time-series dataframe for each
+patient. A total of 135 patients were processed. From each of these
+patients available Arterial Blood Gas (ABG) data, basic laboratory blood
+tests, ventilator settings, and basic cardiovascular observations were
+isolated prior to when the patient was placed in the prone position.
+That same information (with the exception of laboratory blood tests)
+were noted immediately after the patient was turned prone, immediately
+prior to when they were returned to the supine position, and immediately
+after they were returned to the supine position.
+
+### Data analysis
+Data wrangling, exploration, and machine learning is performed using R
+4.2.2 "Innocent and Trusting". Data relating to observations before the
+initial session of prone positioning was used, regardless of how many
+total sessions of prone positioning that the patient underwent. All
+continuous variables were isolated from the dataset and subjected to a
+Gaussian Naive Bayes algorithm. The outcome variable was death during
+ICU admission. 10-fold cross validation is used.
+
+```{r gnb_model}
+#| include: false
+#| warning: false
+
+# load df
+load('../data/pre_post_changes.Rda')
+
+# split to folds
+folds <- 5
+prone_sess_folds <- pre_post_changes %>% vfold_cv(v = folds, strata = outcome)
+
+# create recipe
+prone_sess_recipe <- recipe(outcome ~ ., data = pre_post_changes) %>% 
+  step_rm(ends_with(c('prone', 'percent')),
+          all_nominal_predictors(),
+          patient_id, 
+          time_supine,
+          time_prone,
+          los_days,
+          plateau_airway_pressure_d_supine,
+          resistance_d_supine,
+          ionised_calcium_abg_change_absolute,
+          ionised_calcium_abg_change_percent,
+          ionised_calcium_abg_supine,
+          total_proning_sessions,
+          aa_p_aco2_change_percent,
+          aa_p_aco2_change_absolute,
+          aa_gradient_p_aco2_supine,
+          oxy_factor_supine,
+          ph_abg_supine,
+          ph_change_absolute,
+          die_in_72,
+          die_in_120,
+          die_in_168) %>%
+  step_corr(all_numeric_predictors(), threshold = 0.8) %>% 
+  step_zv() %>% 
+  prep()
+
+# initiate empty df with accuracy measures
+gnb_performance <- tibble(fold = 0,
+                          accuracy = 0, 
+                          sensitivity = 0, 
+                          specificity = 0, 
+                          ppv = 0,
+                          npv = 0,
+                          roc_auc = 0, 
+                          f_measure = 0, 
+                          kappa = 0)
+
+# loop to train, test, create measures of gnb models
+
+for (i in 1:folds) {
+  fold_train <- prone_sess_folds$splits[[i]] %>% analysis()
+  fold_train <- bake(object = prone_sess_recipe, new_data = fold_train, composition = 'tibble') %>% filter(proning_session == 1 & pf_ratio_supine < 20)
+  
+  fold_train_predictors <- fold_train %>% select(-outcome) %>% as.matrix()
+  fold_train_outcome <- fold_train$outcome
+  
+  gnb_fold <- gaussian_naive_bayes(x = fold_train_predictors, y = fold_train_outcome)
+  
+  fold_test <- prone_sess_folds$splits[[i]] %>% assessment()
+  fold_test <- bake(object = prone_sess_recipe, new_data = fold_test, composition = 'tibble') %>% filter(proning_session == 1 & pf_ratio_supine < 20)
+  
+  fold_test_predictors <- fold_test %>% select(-outcome) %>% as.matrix()
+  fold_test_outcome <- fold_test$outcome
+  
+  fold_test$pred_outcome <- predict(gnb_fold, newdata = fold_test_predictors, type = 'class')
+  fold_test$pred_prob <- predict(gnb_fold, newdata = fold_test_predictors, type = 'prob')[, 1]
+  
+  # metrics
+  acc_test <-accuracy(data = fold_test, truth = outcome, estimate = pred_outcome)
+  sens_test <- sensitivity(data = fold_test, truth = outcome, estimate = pred_outcome)
+  spec_test <-specificity(data = fold_test, truth = outcome, estimate = pred_outcome)
+  roc_auc_test <- roc_auc(data = fold_test, truth = outcome, estimate = pred_prob)
+  fmeas_test <- f_meas(data = fold_test, truth = outcome, estimate = pred_outcome)
+  kappa_test <- kap(data = fold_test, truth = outcome, estimate = pred_outcome)
+  ppv_test <- ppv(data = fold_test, truth = outcome, estimate = pred_outcome)
+  npv_test <- npv(data = fold_test, truth = outcome, estimate = pred_outcome)
+  
+ gnb_performance <- add_row(gnb_performance, 
+                            fold = i,
+                            accuracy = round(acc_test$.estimate, 2), 
+                            sensitivity = round(sens_test$.estimate, 2),
+                            specificity = round(spec_test$.estimate, 2),
+                            ppv = round(ppv_test$.estimate, 2),
+                            npv = round(npv_test$.estimate, 2),
+                            roc_auc = round(roc_auc_test$.estimate, 2),
+                            f_measure = round(fmeas_test$.estimate, 2),
+                            kappa = round(kappa_test$.estimate, 2))
+}
+
+# tidy the accuracy params tibble
+gnb_performance <- gnb_performance[2:(folds + 1), ]
+
+# tidy
+rm(i,
+   folds,
+   fold_test_outcome,
+   fold_train_outcome,
+   acc_test, 
+   fmeas_test,
+   kappa_test,
+   roc_auc_test,
+   sens_test,
+   spec_test,
+   fold_test,
+   fold_test_predictors, 
+   fold_train_predictors,
+   prone_sess_folds)
+```
+
+\newpage
+
+## Results
+### Patient demographics
+
+The electronic health record (EHR) system used in the ICU of University
+Hospital Galway (UHG) was interrogated in order to isolate patients on
+file who had been placed in the prone position. The isolated data
+consisted of physiological, blood, and ventilator data recorded at least
+hourly for patients. The result was a population:
+
+-   admitted to the Intensive Care Unit (ICU) between 14/07/2013 and
+    20/03/2022.
+-   older than 18 years of age.
+-   underwent invasive ventilation.
+-   were placed in the prone position due to poor respiratory function
+    at least one time while they were invasively ventilated.
+-   with recorded variables relating to the baseline and changes taking
+    place throughout the patients initial session of prone-positioning
+    
+The result can be seen in Figure 01.
+    
+![Patient demographics](images/table_01_demographics_march23.png){fig-align="default" width=75%}
+
+### Model
+A summary of the model is below.
+
+```{r model_summary}
+#| echo: false
+#| warning: false
+
+summary(gnb_fold)
+```
+\
+
+An overall breakdown of the metrics relating to each fold can be seen in the following:
+
+```{r metrics}
+#| echo: false
+#| warning: false
+
+gnb_performance
+```
+\
+
+A visual of the resulting ROC curve (for fold 3) can be seen below:
+
+
+
+\
+
+An average of the results is:
+
+```{r average}
+#| echo: false
+#| warning: false
+
+gnb_performance %>% summarise(accuracy_mean = round(mean(accuracy), 2),
+                              sensitivity_mean = round(mean(sensitivity), 2),
+                              specificity_mean = round(mean(specificity), 2),
+                              ppv_mean = round(mean(ppv), 2),
+                              npv_mean = round(mean(npv), 2),
+                              roc_auc_mean = round(mean(roc_auc), 2),
+                              f_measure_mean = round(mean(f_measure), 2),
+                              kappa_mean = round(mean(kappa), 2))
+
+```
+
+\newpage
+
+# References
