@@ -1,0 +1,441 @@
+---
+title: "Response to initial session of prone positioning predicts risk of death during ICU admission"
+author: "David M Hannon"
+format: 
+  html:
+    theme: cerulean
+    toc: true
+    toc-depth: 2
+    toc-location: right
+    link-external-icon: true
+    link-external-newwindow: true
+    mainfont: 'IBM Plex Serif'
+    fontsize: '6'
+    standalone: true
+    embed-resources: false
+  pdf:
+    documentclass: article
+    papersize: a4
+    linestretch: 1.15
+    mainfont: 'Lora'
+    sansfont: 'Lora'
+    fontsize: 8pt
+    toc: false
+    number-sections: false
+    geometry: 
+    - top=30mm
+    - bottom=40mm
+    - left=30mm
+    - right=30mm
+editor: 
+  markdown: 
+    wrap: 72
+bibliography: references.bib
+csl: american-medical-association.csl
+---
+
+```{r setup}
+#| include: false
+
+library(tidyverse)
+library(readxl)
+library(DataExplorer)
+library(caret)
+library(mice)
+library(corrr)
+library(tidymodels)
+set.seed(3.14)
+
+load('../data/pre_post_changes.Rda')
+```
+
+## Introduction
+
+### Background
+
+The Acute Respiratory Distress Syndrome (ARDS) was initially identified
+as a clinical entity in the 1960s[@ashbaugh1967]. Pathophysiologically,
+ARDS consists of diffuse alveolar damage due to the activation of
+alveolar macrophages to release pro-inflammatory cytokines[@martin1999]
+that attract neutrophils to the lungs where they damage the alveolar and
+capillary epithelium by release of toxic mediators. This leads to the
+alveoli being filled with bloody, proteinaceous fluid. Consequently, the
+surfactant can no longer support the alveoli[@ware2001]. The end result
+is that these damaged alveoli lead to impaired gas exchange, which is
+the pathophysiolgic hallmark of ARDS.
+
+Patients with certain clinical conditions are at higher risk for
+developing ARDS. These can broadly be grouped into direct lung injury
+risk factors like pneumonia, aspiration, pulmonary contusion,
+inhalational injury, near drowning etc. (heretofore referred to as
+'ARDSp') and indirect lung injury risk factors such as sepsis,
+non-thoracic injuries/hemorrhagic shock, pancreatitis, burns,
+drugs/toxins, blood transfusions, cardiopulmonary bypass and reperfusion
+injury after lung transplant or embolectomy (which will now be referred
+to as 'ARDSexp')[@thompson2017].
+
+To date, there are no specific drugs or therapies available to directly
+treat/prevent ARDS. Mechanical ventilation that aims to protect injured
+lungs and minimize Ventilator Induced Lung Injury (VILI), and management
+of refractory hypoxaemia, are the keystones in supportive management of
+ARDS[@fan2017]. Part of the above can include placing a patient in the
+prone (i.e. 'face down') position. This was first described as a therapy
+for ARDS in the 1970s[@piehl1976]. The mechanism by which prone
+positioning improves oxygenation is multifactorial. It reduces the
+ventral to dorsal transpulmonary pressure difference,
+ventilation-perfusion mismatch and lung compression[@cornejo2013;
+@jozwiak2013]. Other potential physiological effects of prone
+positioning include a decrease in proinflammatory cytokines and
+improvement in RV dysfunction by preserving pulmonary
+circulation[@guérin2014].
+
+The first prospective randomized control trial (known as the 'PROSEVA'
+trial) that showed a mortality benefit from prolonged prone positioning
+was conducted in France and published in 2013[@guérin2013]. Earlier
+randomized control trials failed to show significant mortality benefit ,
+which was likely due inconsistent use of lung protective ventilation,
+shorter duration of prone positioning and application of prone
+positioning in patients with mild-moderate ARDS[@sud2014]. Prone
+positioning for at least 12 to 16 hours per day, while administering low
+tidal volumes (4-6ml/kg of ideal body weight), is now strongly
+recommended in ventilated patients with severe ARDS[@banavasi2021].
+
+Many questions regarding the utility and efficacy of the prone position
+remain. An important issue lies in identifying patients who, although
+they fit the criteria to undergo prone positioning, are unlikely to
+receive a mortality benefit and in whom other therapies may be
+effective[@kawakami2022].
+
+### Aim
+
+The aim this study was to examine if commonly clinically available
+measures could be used to assist in prognostication for patients who
+undergo prone positioning for ARDS. This consisted of examining the
+response of patients to their initial session of prone positioning in
+the context of ICU mortality. The study aimed to examine if a predictive
+model could be created to assist this.
+
+## Methods
+
+### Study population
+
+The electronic health record (EHR) system used in the ICU of University
+Hospital Galway (UHG) was interrogated in order to isolate patients on
+file who had been placed in the prone position. The isolated data
+consisted of physiological, blood, and ventilator data recorded at least
+hourly for patients. The result was a population who were:
+
+-   admitted to the Intensive Care Unit (ICU) between 14/07/2013 and
+    20/03/2022.
+-   older than 18 years of age.
+-   underwent invasive ventilation.
+-   were placed in the prone position due to poor respiratory function
+    at least one time while they were invasively ventilated.
+
+This data was further refined to isolate:
+
+-   patients who had moderate to severe respiratory impairment (as
+    defined as a PF ratio \< 20kPa / 150mmHg).
+-   were placed in the prone position for at least 12 hours
+-   were admitted from the ward or from the emergency department of UHG
+-   readings relating to the initial session of prone positioning only.
+
+```{r initial_refining}
+#| include: false
+
+# refine variables to contain all baseline data, sessions > 12 hours, and
+# ARDS severity as SEVERE/MODERATE and proning session 1
+pre_post_severe_att02 <- pre_post_changes %>% 
+  filter(proning_session == 1) %>% 
+  filter(adm_location != 'transfer') %>% 
+  filter(pf_ratio_supine <= 20) %>%  
+  filter(time_between_abg >= 0.5) %>% 
+  select(-contains('prone')) %>% 
+  select(-c('ards_risk_factor', 
+            'pathogenic_factor', 
+            'ventilator', 
+            'die_in_72', 
+            'die_in_120', 
+            'die_in_168'))
+```
+
+The result is a total of `r nrow(pre_post_severe_att02)` observations.
+
+### Data
+
+#### Processing
+
+Variables were compared from before the patient was placed in the prone
+position with those taken at the end of the session of prone
+positioning. The differences in the parameters were calculated. The
+model evaluated both baseline parameters (i.e. those from before the
+proning session) and the differences (i.e. the change in those
+parameters over the duration of the session of prone positioning).
+
+#### Missing data
+
+When performing analysis using logistic regression, the issue of how to
+process missing data is important. The nature of missing data itself is
+important, as missingness can in and of itself have meaning. In this
+case, missing data has been imputed using the 'multiple imputation via
+chained equations' (MICE) approach for all variables missing \<5% of
+data. All of this data can be classified as 'missing nearly at random'
+(MNAR).
+
+```{r refine_and_visualise_NA}
+#| echo: false
+#| warning: false
+#| fig-align: default
+#| fig-height: 8
+#| fig-width: 7
+#| fig-cap-location: bottom
+#| fig-cap: Missing observations in dataset
+
+# we now have 80 sessions of prone-positioning that fit. let's refine the dataset
+# to look at absolute (rather than percentage) changes and baseline vars
+pre_post_severe_att02_absolute <- pre_post_severe_att02 %>% 
+  select(patient_id, 
+         predicted_weight,
+         gender,
+         age_years, 
+         weight_kg, 
+         ards_type, 
+         apache_ii, 
+         outcome, 
+         time_between_abg,
+         contains('supine'),
+         contains('absolute'))
+
+# we will drop any with >5% missingness
+pre_post_severe_att02_absolute <- pre_post_severe_att02_absolute %>% 
+  select(-c(plateau_airway_pressure_d_supine,
+            resistance_d_supine,
+            ionised_calcium_abg_supine,
+            ionised_calcium_abg_change_absolute,
+            anion_gap_abg_supine,
+            anion_gap_change_absolute,
+            aa_p_aco2_change_absolute,
+            aa_gradient_p_aco2_supine,
+            et_co2_change_absolute,
+            end_tidal_co2_marquette_supine,
+            lymphocytes_supine,
+            gfr_supine,
+            ventilatory_ratio_supine,
+            vent_ratio_change_absolute,
+            oxy_factor_supine,
+            oxy_factor_change_absolute,
+            minute_volume_change_absolute,
+            minute_volume_coalesced_supine,
+            peak_pressure_coalesced_supine,
+            peak_pressure_change_absolute,
+            mean_airway_pressure_change_absolute,
+            mean_airway_pressure_coalesced_supine,
+            lactate_abg_change_absolute))
+
+# further refinement
+pre_post_severe_att02_absolute <- pre_post_severe_att02_absolute %>% 
+  select(-c(patient_id,  # irrelevant for LR
+            fi_o2_change_absolute,
+            fi_o2_supine, # 'selected' rather than 'measured'
+            ph_change_absolute,
+            ph_abg_supine, # a Log value, we have it as H+ concentration
+            sa_o2_change_absolute, 
+            sa_o2_systemic_supine,
+            resp_rate_change_absolute,
+            resp_rate_supine,
+            predicted_weight))
+
+# let's examine resulting missingness
+plot_missing(pre_post_severe_att02_absolute, theme_config = theme_light())
+```
+
+```{r imputation}
+#| include: false
+
+# impute missings and extract dataset
+imp_data_object02 <- mice(data = pre_post_severe_att02_absolute, m = 5, method = 'cart', seed = 3.14)
+pre_post_severe_impute02 <- complete(imp_data_object02)
+rm(imp_data_object02)
+
+# take a look at the data
+create_report(data = pre_post_severe_impute02, 
+              output_file = 'imputed_severemoderate_for_LR02.html', 
+              y = 'outcome', 
+              report_title = 'Analysis of data relating to initial proning session for moderate/severe ARDS')
+
+```
+
+### Logistic Regression
+
+The model that was created consists of a Logistic Regression model in
+which features were selected via backward stepwise regression. This
+technique uses a penalty term applied to different model parameters
+according to the measured Akaike Information Criterion (AIC) when
+features are removed from the model. This results in the subset of
+variables in the data set resulting in the best performing model, that
+is a model that lowers prediction error.
+
+The data was split at a ratio of 80% for training data, with a holdout
+set of the remaining 20% for testing the resulting model.
+
+Correlations within the training data were examined, and a variable was
+removed if there was a Pearson correlation \>0.5 with another variable.
+This was performed until no correlations \> 0.5 existed.
+
+```{r remove_correlations_and_create_model}
+#| include: false
+
+pre_post_severe_impute02 <- pre_post_severe_impute02 %>% 
+  select(-c(pa_o2_supine,
+            hydrogen_ion_abg_nmolL_supine,
+            bicarbonate_abg_a_supine,
+            potassium_abg_supine,
+            glucose_abg_supine,
+            total_haemoglobin_supine,
+            white_cell_count_supine,
+            urea_supine,
+            aa_gradient_paco2_supine,
+            pa_o2_change_absolute,
+            bicarbonate_change_absolute,
+            peep_supine,
+            peep_change_absolute,
+            aa_paco2_change_absolute,
+            time_supine,
+            arterial_pressure_systolic_supine))
+
+# one-hot encode
+one_hot_encoder2 <- dummyVars(formula = ' ~ .', data = pre_post_severe_impute02)
+pre_post_severe_oneHot2 <- data.frame(predict(object = one_hot_encoder2, newdata = pre_post_severe_impute02))
+pre_post_severe_oneHot2 <- pre_post_severe_oneHot2 %>% select(-c(gender.f, outcome.dc))
+
+
+# create train /test split
+split_pre_post_modSevere <- initial_split(pre_post_severe_oneHot2, prop = 0.8, strata = 'outcome.rip')
+train_pre_post_modSevere <- training(split_pre_post_modSevere)
+
+
+# train model using stepwise AIC (backward technique)
+lr_modSevere <- glm(data = train_pre_post_modSevere,
+                    formula = outcome.rip ~ gender.m + age_years + ards_type.Covid_19 + apache_ii + weight_kg + pfr_change_absolute + neutrophils_supine + c_reactive_protein_supine + lactate_abg_supine + base_excess_change_absolute + hydrogen_ion_absolute + glucose_change_absolute,
+                    family = 'binomial') %>% 
+  MASS::stepAIC(direction = 'backward', trace = F, k =2)
+```
+
+## Results
+
+```{r predictions}
+#| include: false
+
+# create predictions from training set and check stats
+train_pre_post_modSevere$response_odds <- predict(object = lr_modSevere, 
+                                                  newdata = train_pre_post_modSevere,
+                                                  type = 'response')
+
+threshold <- 0.5
+
+train_pre_post_modSevere$pred_rip <- if_else(condition = train_pre_post_modSevere$response_odds > threshold,
+                                             true = 1, 
+                                             false = 0)
+
+train_pre_post_modSevere <- train_pre_post_modSevere %>% 
+  mutate(outcome.rip = factor(outcome.rip),
+         pred_rip = factor(pred_rip))
+
+
+# predict from test data
+test_pre_post_modSevere <- testing(split_pre_post_modSevere)
+
+test_pre_post_modSevere$response_odds <- predict(object = lr_modSevere,
+                                                 newdata = test_pre_post_modSevere,
+                                                 type = 'response')
+
+test_pre_post_modSevere$pred_rip <- if_else(condition = test_pre_post_modSevere$response_odds > threshold,
+                                            true = 1,
+                                            false = 0)
+
+test_pre_post_modSevere <- test_pre_post_modSevere %>% 
+  mutate(outcome.rip = factor(outcome.rip),
+         pred_rip = factor(pred_rip))
+
+```
+
+### Model description
+
+The resulting model consisted of the features listed below.
+
+```{r model_overview}
+#| echo: false
+#| tbl-cap-location: bottom
+#| tbl-cap: Variables in logistic regression model
+
+summary(lr_modSevere)
+```
+
+### Performance on training data
+
+Below is the confusion matrix that results from the model's performance
+on the training data.
+
+```{r conf_mat_train}
+#| echo: false
+#| warning: false
+
+train_cm <- conf_mat(data = train_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+
+train_acc <- accuracy(data = train_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+train_kap <- kap(data = train_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+train_sens <- sens(data = train_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+train_spec <- spec(data = train_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+
+train_cm
+```
+
+Other key metrics relating to the training data are listed below.
+
+| **Metric**  | **Value**                          |
+|:------------|:-----------------------------------|
+| Accuracy    | `r round(train_acc$.estimate, 2)`  |
+| Kappa       | `r round(train_kap$.estimate, 2)`  |
+| Sensitivity | `r round(train_sens$.estimate, 2)` |
+| Specificity | `r round(train_spec$.estimate, 2)` |
+
+: Model metrics (training data)
+
+### Performance on test data
+
+Below is the confusion matrix that results from the model's performance
+on the test data.
+
+```{r conf_mat_test}
+#| echo: false
+#| warning: false
+
+test_cm <- conf_mat(data = test_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+
+test_acc <- accuracy(data = test_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+test_kap <- kap(data = test_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+test_sens <- sens(data = test_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+test_spec <- spec(data = test_pre_post_modSevere, truth = outcome.rip, estimate = pred_rip)
+
+test_cm
+```
+
+Other key metrics relating to the test data are listed below.
+
+| **Metric**  | **Value**                         |
+|:------------|:----------------------------------|
+| Accuracy    | `r round(test_acc$.estimate, 2)`  |
+| Kappa       | `r round(test_kap$.estimate, 2)`  |
+| Sensitivity | `r round(test_sens$.estimate, 2)` |
+| Specificity | `r round(test_spec$.estimate, 2)` |
+
+: Model metrics (test data)
+
+## Discussion
+
+-   this approach does now give insight to causality
+-   numbers are low
+
+\newpage
+
+## References
