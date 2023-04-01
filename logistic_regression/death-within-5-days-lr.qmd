@@ -1,0 +1,450 @@
+---
+title: "Predicting likelihood of death within 5 days of proning using logistic regression"
+author: "David Hannon"
+format: 
+  pdf:
+    documentclass: article
+    papersize: a4
+    fontfamily: charter
+    fontsize: 7pt
+    toc: false
+    number-sections: true
+    geometry: 
+    - top=30mm
+    - bottom=30mm
+    - left=30mm
+    - right=30mm
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup}
+#| include: false
+set.seed(103L)
+library(tidyverse)
+library(lubridate)
+library(caret)
+library(DataExplorer)
+library(tidymodels)
+library(glmnet)
+library(gtsummary)
+library(corrplot)
+library(mice)
+```
+
+## Introduction
+
+Some general preprocessing has been employed thus far to create a raw
+dataset that can be further prepared for various machine learning
+applications. This chapter will outline my attempts to create a logistic
+regression model that gives a likelihood of mortality based on a
+patient's response to proning.
+
+This will necessitate
+
+1.  isolating the variables that are likely to be involved in predicting
+    the outcome
+2.  feature engineering if required
+3.  exploring correlations, and decorrelating
+4.  train/test split
+5.  train the model
+6.  test the model and evaluate it
+
+## Variable isolation
+
+```{r load_data}
+#| include: false
+setwd('/Users/davidhannon/Documents/02. Medicine/Med_Programming/00. Patient DB/ai_df/interim_dfs')
+load('pre_post_26_initial_missings_removed.Rda')
+pre_post_lr <- pre_post_26
+rm(pre_post_26)
+```
+
+## Preparing the frame for analysis
+
+The precise time of an observation is not important in this context.
+Likewise, the total length of stay is not a variable that can be known
+when a patient is still in the ICU, so it too will be removed.
+
+```{r}
+pre_post_lr <- pre_post_lr %>% 
+  select(-c(time_supine, time_prone, los_days, total_proning_sessions))
+```
+
+Arterial blood pressure will be removed as we do not have access to the
+amount of vasopressors required to support the BP at this time, vastly
+reducing the underlying accuracy and utility of this measure.
+
+```{r}
+pre_post_lr <- pre_post_lr %>% 
+  select(-c(arterial_pressure_systolic_supine, arterial_pressure_systolic_prone))
+```
+
+Finally, we will add replace an index of observations.
+
+```{r}
+pre_post_lr <- pre_post_lr %>% 
+  mutate(observation = 1:nrow(.))
+```
+
+BMI will be binned into categories. The original number will be
+retained.
+
+```{r}
+#| warning: false
+
+pre_post_lr$bmi_category[pre_post_lr$bmi < 18.5] <- 'underweight'
+pre_post_lr$bmi_category[pre_post_lr$bmi >= 18.5 & pre_post_lr$bmi < 25] <- 'normal weight'
+pre_post_lr$bmi_category[pre_post_lr$bmi >= 25 & pre_post_lr$bmi < 30] <- 'overweight'
+pre_post_lr$bmi_category[pre_post_lr$bmi >= 30 & pre_post_lr$bmi < 35] <- 'obese (class 1)'
+pre_post_lr$bmi_category[pre_post_lr$bmi >= 35 & pre_post_lr$bmi < 40] <- 'obese (class 2)'
+pre_post_lr$bmi_category[pre_post_lr$bmi > 40] <- 'obese (class 3)'
+
+pre_post_lr <- pre_post_lr %>% 
+  mutate(bmi_category = factor(bmi_category)) %>% 
+  select(-height_cm)
+```
+
+## Basic dataset exploration
+
+### Considering the response variable
+
+It is important to determine an appropriate response variable. My
+hypothesis is that the risk of death in the next X days/hours can be
+predicted by the patient's 'response to a session of prone positioning'.
+
+Three timeframes are considered:
+
+1.  Death within 3 days / 72 hours of the proning session ending
+2.  Death within 5 days / 120 hours of the proning session ending
+3.  Death within 7 days / 168 hours of the proning session ending
+
+The next sections will seek to identify variables that seem to show
+promise in predicting death within these times.
+
+### Death within 120 hours
+
+```{r}
+#| echo: false
+
+pre_post_lr %>% 
+  select(-c(proning_session,
+            patient_id,
+            die_in_72, 
+            die_in_168,
+            heart_rate_supine, 
+            heart_rate_prone, 
+            ards_risk_factor, 
+            pathogenic_factor, 
+            adm_location, 
+            end_tidal_co2_marquette_supine,
+            peep_supine,
+            ventilator, 
+            outcome, 
+            time_between_abg, 
+            session_length, 
+            observation,
+            et_co2_change_absolute,
+            resp_rate_change_absolute,
+            minute_volume_change_absolute,
+            ph_change_absolute,
+            ends_with(c('percent', 'prone')))) %>% 
+  tbl_summary(by = die_in_120, missing = 'no', 
+              statistic = list(all_continuous() ~ '{mean} ({sd})'), 
+              label = list(fi_o2_supine ~ 'FiO2 (%)',
+                           sa_o2_systemic_supine ~ 'O2 saturation (%)',
+                           ph_abg_supine ~ 'pH',
+                           resp_rate_supine ~ 'Resp. Rate (bpm)',
+                           pa_o2_supine ~ 'paO2 (kPa)',
+                           pa_co2_supine ~ 'paCO2 (kPa)',
+                           bicarbonate_abg_a_supine ~ 'Bicarbonate (mmol/L)',
+                           lactate_abg_supine ~ 'Lactate (mmol/L)',
+                           base_excess_vt_supine ~ 'Base Excess (mmol/L)',
+                           potassium_abg_supine ~ 'Potassium (mmol/L)',
+                           sodium_abg_supine ~ 'Sodium (mmol/L)',
+                           ionised_calcium_abg_supine ~ 'Ionised Calcium (mmol/L)',
+                           anion_gap_abg_supine ~ 'Anion Gap (mmol/L)',
+                           glucose_abg_supine ~ 'Glucose (mmol/L)',
+                           total_haemoglobin_supine ~ 'Hb (g/dL))',
+                           white_cell_count_supine ~ 'WCC (x10^9/L)',
+                           neutrophils_supine ~ 'Neutrophils (x10^9/L)',
+                           lymphocytes_supine ~ 'Lymphocytes (x10^9/L)',
+                           c_reactive_protein_supine ~ 'CRP (mg/L)',
+                           urea_supine ~ 'Urea (mmol/L)',
+                           pcre_supine ~ 'Creatinine (µmol/L)',
+                           gfr_supine ~ 'GFR (mL/min/1.73m^2)',
+                           haematocrit_supine ~ 'Haematocit',
+                           platelet_count_supine ~ 'Platelets (x10^9/L)',
+                           albumin_supine ~ 'Albumin (g/L)',
+                           predicted_weight ~ 'Predicted Bodyweight (kg)',
+                           gender ~ 'Gender',
+                           age_years ~ 'Age (years)',
+                           weight_kg ~ 'Weight (kg)',
+                           ards_type ~ 'ARDS subtype',
+                           apache_ii ~ 'APACHE II score',
+                           bmi ~ 'BMI',
+                           sa_o2_change_absolute ~ 'Change in saO2',
+                           #ph_change_absolute, ~ 'Change in pH', (causing an uncertain error)
+                           hydrogen_ion_absolute ~ 'Change in H+ ion concentration',
+                           pa_o2_change_absolute ~ 'Change in paO2',
+                           pa_co2_change_absolute ~ 'Change in paCO2',
+                           bicarbonate_change_absolute ~ 'Change in bicarbonate',
+                           lactate_abg_change_absolute ~ 'Change in lactate',
+                           base_excess_change_absolute ~ 'Change in BE',
+                           potassium_abg_change_absolute ~ 'Change in potassium',
+                           sodium_abg_change_absolute ~ 'Change in sodium',
+                           glucose_change_absolute ~ 'Change in glucose',
+                           fi_o2_change_absolute ~ 'Change in FiO2 adminstered',
+                           peep_change_absolute ~ 'Change in PEEP adminstered',
+                           mean_airway_pressure_change_absolute ~ 'Change in Paw',
+                           peak_pressure_change_absolute ~ 'Change in peak airway pressure',
+                           pfr_change_absolute ~ 'Change in PF ratio',
+                           oxy_factor_change_absolute ~ 'Change in oxygenation factor',
+                           vent_ratio_change_absolute ~ 'Change in ventilatory ratio',
+                           aa_paco2_change_absolute ~ 'Change in Aa gradient',
+                           bmi_category ~ 'Classification of bodyweight'
+                           )) %>% 
+  add_p() %>% 
+  add_significance_stars() %>% 
+  modify_caption('Comparison between patients who did and did not die within 120 hours') %>% 
+  modify_header(label = '**Variable**') %>% 
+  modify_spanning_header(all_stat_cols() ~ 'Death within 120 hours of session')
+```
+
+```{r}
+#| echo: false
+#| warning: false
+
+pre_post_lr %>% 
+  select(-c(proning_session,
+            patient_id,
+            die_in_72, 
+            die_in_168,
+            heart_rate_supine, 
+            heart_rate_prone, 
+            ards_risk_factor, 
+            pathogenic_factor, 
+            adm_location, 
+            ventilator, 
+            outcome, 
+            time_between_abg, 
+            session_length, 
+            observation,
+            et_co2_change_absolute,
+            resp_rate_change_absolute,
+            minute_volume_change_absolute,
+            ph_change_absolute,
+            ends_with('percent'))) %>% 
+  plot_boxplot(by = 'die_in_120', ggtheme = theme_light())
+```
+
+One notable features that can be seen in the above series of box-plots
+is the high number of outliers.
+
+## Preparing the dataset for Logistic Regression
+
+It is important to:
+
+1.  Choose good predictors
+2.  Process outliers
+3.  Deal with missing values
+
+### Choosing predictors
+
+After the application of domain-specific knowledge and cross-referencing
+by examining the difference in box-plots between patients who did and
+did not die in the days following an episode of prone positioning, the
+following candidate variables have been identified:
+
+-   `pa_co2_supine`
+-   `bicarbonate_abg_a_supine`
+-   `bicarbonate_change_absolute`
+-   `bicarbonate_change_percent`
+-   `total_haemoglobin_supine`
+-   `c_reactive_protein_supine`
+-   `hydrogen_ion_abg_nmolL_supine`
+-   `hydrogen_ion_percent`
+-   `aa_gradient_paco2_supine`
+-   `aa_paco2_change_absolute`
+-   `aa_paco2_change_percent`
+-   `pf_ratio_supine`
+-   `pfr_change_absolute`
+-   `pfr_change_percent`
+-   `oxy_factor_supine`
+-   `oxy_factor_change_absolute`
+-   `oxy_factor_chane_percent`
+
+This is in addition to the following demographics and outcome variables
+of interest:
+
+-   `weight`
+-   `bmi`
+-   `bmi_category`
+-   `age_years`
+-   `gender`
+-   `ventilator`
+-   `apache_ii`
+-   `ards_type`
+-   `outcome`
+-   `die_in_72`
+-   `die_in_120`
+-   `die_in_168`
+
+```{r}
+#| echo: false
+
+pre_post_lr_01 <- pre_post_lr %>% 
+  select(observation,
+         patient_id,
+         age_years,
+         gender,
+         apache_ii,
+         ards_type,
+         weight_kg,
+         bmi,
+         bmi_category,
+         outcome,
+         die_in_72,
+         die_in_120,
+         die_in_168,
+         pa_co2_supine,
+         bicarbonate_abg_a_supine,
+         bicarbonate_change_absolute,
+         total_haemoglobin_supine,
+         c_reactive_protein_supine,
+         hydrogen_ion_abg_nmolL_supine,
+         hydrogen_ion_absolute,
+         aa_gradient_paco2_supine,
+         aa_paco2_change_absolute,
+         pf_ratio_supine,
+         pfr_change_absolute,
+         oxy_factor_supine,
+         oxy_factor_change_absolute)
+```
+
+### Outlier detection
+
+In a small dataset, it is best not to remove entire observations because
+of outliers. We will consider the outliers and decide whether to retain
+them or remove them (and they can be imputed later).
+
+Initially, each variable was interrogated using a boxplot. The
+interquartile range was calculated. Datapoints that fell either 1.5
+interquartile ranges below the first quartile, or 1.5 interquartile
+ranges above the third quartile, were defined as outliers. The following
+outliers are identified in this way:
+
+-   `bmi` = 4 outliers (1.2%)
+
+-   `apache_ii` = 4 outliers (1.2%)
+
+-   `pa_co2_supine` = 9 outliers (2.6%)
+
+-   `bicarbonate_abg_a_supine` = 2 outliers (0.6%)
+
+-   `bicarbonate_change_absolute`= 15 outliers (4.4%)
+
+-   `total_haemoglobin_supine` = 2 outliers (0.6%)
+
+-   `c_reactive_protein_supine` = 4 outliers (1.2%)
+
+-   `hydrogen_ion_abg_nmolL_supine` = 16 outliers (4.7%)
+
+-   `hydrogen_ion_absolute` = 21 outliers (6.2%)
+
+-   `aa_gradient_paco2_supine` = no outliers
+
+-   `aa_paco2_change_absolute` = 2 outliers (0.6%)
+
+-   `pf_ratio_supine` = 3 outliers (0.9%)
+
+-   `pfr_change_absolute` = 10 outliers (3.4%)
+
+-   `oxy_factor_supine` = 4 outliers (1.2%)
+
+-   `oxy_factor_change_absolute` = 10 outliers (2.9%)
+
+### Missing values
+
+| Variable                      | Missing (%)                                                                                       |
+|-----------------------|-------------------------------------------------|
+| `bmi`                         | `r round(sum(is.na(pre_post_lr_01$bmi)) / nrow(pre_post_lr_01) * 100, 1)`                         |
+| `bmi_category`                | `r round(sum(is.na(pre_post_lr_01$bmi_category)) / nrow(pre_post_lr_01) * 100, 1)`                |
+| `apache_ii`                   | `r round(sum(is.na(pre_post_lr_01$apache_ii)) / nrow(pre_post_lr_01) * 100, 1)`                   |
+| `age_years`                   | 0.0                                                                                               |
+| `gender`                      | 0.0                                                                                               |
+| `ards_type`                   | 0.0                                                                                               |
+| `weight_kg`                   | 0.0                                                                                               |
+| `outcome`                     | 0.0                                                                                               |
+| `die_in_72`                   | 0.0                                                                                               |
+| `die_in_120`                  | 0.0                                                                                               |
+| `die_in_168`                  | 0.0                                                                                               |
+| `pa_co2_supine`               | `r round(sum(is.na(pre_post_lr_01$pa_co2_supine)) / nrow(pre_post_lr_01) * 100, 1)`               |
+| `bicarbonate_abg_a_supine`    | `r round(sum(is.na(pre_post_lr_01$bicarbonate_abg_a_supine)) / nrow(pre_post_lr_01) * 100, 1)`    |
+| `bicarbonate_change_absolute` | `r round(sum(is.na(pre_post_lr_01$bicarbonate_change_absolute)) / nrow(pre_post_lr_01) * 100, 1)` |
+| `total_haemoglobin_supine`    | `r round(sum(is.na(pre_post_lr_01$total_haemoglobin_supine)) / nrow(pre_post_lr_01) * 100, 1)`    |
+| `c_reactive_protein_supine`   | `r round(sum(is.na(pre_post_lr_01$c_reactive_protein_supine)) / nrow(pre_post_lr_01) * 100, 1)`   |
+| `hydrogen_ion_nmolL_supine`   | `r round(sum(is.na(pre_post_lr_01$hydrogen_ion_abg_nmolL_supine)) / nrow(pre_post_lr_01) * 100, 1)`    |
+| `hydrogen_ion_absolute`       | `r round(sum(is.na(pre_post_lr_01$hydrogen_ion_absolute)) / nrow(pre_post_lr_01) * 100, 1)`        |
+| `aa_gradient_paco2_supine`    | `r round(sum(is.na(pre_post_lr_01$aa_gradient_paco2_supine)) / nrow(pre_post_lr_01) * 100, 1)`     |
+| `aa_paco2_change_absolute`    | `r round(sum(is.na(pre_post_lr_01$aa_paco2_change_absolute)) / nrow(pre_post_lr_01) * 100, 1)`     |
+| `pf_ratio_supine`             | `r round(sum(is.na(pre_post_lr_01$pf_ratio_supine)) / nrow(pre_post_lr_01) * 100, 1)`              |
+| `pfr_change_absolute`         | `r round(sum(is.na(pre_post_lr_01$pfr_change_absolute)) / nrow(pre_post_lr_01) * 100, 1)`          |
+| `oxy_factor_supine`           | `r round(sum(is.na(pre_post_lr_01$oxy_factor_supine)) / nrow(pre_post_lr_01) * 100, 1)`            |
+| `oxy_factor_change_absolute`  | `r round(sum(is.na(pre_post_lr_01$oxy_factor_change_absolute)) / nrow(pre_post_lr_01) * 100, 1)`   |
+
+### Treating NAs and outliers
+
+An important issue in modeling is handling both missing values and outliers. Missing values can be treated in a number of ways, but removing any observations that possesses a missing value is not the best <REF>.
+
+In general, imputing these values is best as long as the total amount of data in a variable being imputed is <5%. We will therefore look for variables that have both a low amount of outliers and a low amount of NAs.
+
+
+
+
+
+
+
+
+This example will eliminate anything requiring height, oxygenation
+index, and impute the missing data.
+
+```{r}
+# remove variables with too many (>5% total) outliers and NAs
+
+pre_post_lr_test <- pre_post_lr_01 %>% 
+  select(-c(bmi, bmi_category, oxy_factor_supine, oxy_factor_change_absolute))
+```
+
+```{r}
+# begin investigating of this is 'repeated measure' data
+# ==================
+
+# 1. how many patients died within 120 hours of an episode of proning
+length(unique(pre_post_lr_test$patient_id[pre_post_lr_test$die_in_120 == T]))
+
+# 2. how many episodes of proning resulted in a death within 120 hours
+sum(pre_post_lr_test$die_in_120)
+```
+
+```{r}
+#| include: false
+
+# impute data
+
+# 1. there is <5% data missing? yes
+plot_missing(pre_post_lr_test)
+sum(is.na(pre_post_lr_test)) / nrow(pre_post_lr_test)
+
+
+imp_test <- mice(pre_post_lr_test, method = 'cart', m = 50)
+full_data <- complete(imp_test)
+plot_missing(full_data)
+
+model_test <- glm(data = full_data, formula = die_in_120 ~ aa_gradient_paco2_supine + aa_paco2_change_absolute)
+
+full_data$pred_class <- predict(object = model_test, newdata = full_data, type = 'response')
+
+
+```
