@@ -1,3 +1,5 @@
+![](/images/prone_01.jpg)
+
 # ML on dataset relating to the prone position in UHG
 
 ## Folder structure in this repo
