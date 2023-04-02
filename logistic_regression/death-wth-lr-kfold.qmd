@@ -1,0 +1,268 @@
+---
+title: "The utility of analysing the response to initial prone-positioning in predicting ICU mortality using Logistic Regression with k-fold cross-validation"
+author: "David M. Hannon"
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    linestretch: 1.15
+    mainfont: 'Lora'
+    sansfont: 'Lora'
+    fontsize: 8pt
+    toc: false
+    number-sections: false
+    geometry: 
+    - top=30mm
+    - bottom=40mm
+    - left=30mm
+    - right=30mm
+editor: 
+  markdown: 
+    wrap: 72
+bibliography: references.bib
+csl: american-medical-association.csl
+---
+
+```{r setup}
+#| include: false
+
+rm(list = ls())
+library(tidyverse)
+library(tidymodels)
+library(DataExplorer)
+library(glmnet)
+tidymodels_prefer()
+set.seed(3.14)
+```
+
+# Description of dataset
+Bla bla
+
+```{r load_dataset}
+#| include: false
+
+# load the dataset and decide how many cross-folds will be used for the process
+
+folds <- 5
+load('../data/pre_post_changes.Rda')
+```
+
+Here are the columns in this dataset:
+
+```{r}
+colnames(pre_post_changes)
+```
+
+```{r initial_refining}
+#| include: false
+
+# initial and general choice of variables that can suit all purposes, and selection of ONLY initial session of prone positioning.
+pre_post_refined <- pre_post_changes %>% 
+  filter(proning_session == 1) %>% 
+  select(sa_o2_systemic_supine,
+         sa_o2_change_absolute,
+         pa_o2_supine,
+         pa_o2_change_absolute,
+         pa_co2_supine,
+         pa_co2_change_absolute,
+         bicarbonate_abg_a_supine,
+         bicarbonate_change_absolute,
+         lactate_abg_supine,
+         lactate_abg_change_absolute,
+         base_excess_vt_supine,
+         base_excess_change_absolute,
+         potassium_abg_supine,
+         potassium_abg_change_absolute,
+         sodium_abg_supine,
+         sodium_abg_change_absolute,
+         ionised_calcium_abg_supine,
+         ionised_calcium_abg_change_absolute,
+         anion_gap_abg_supine,
+         anion_gap_change_absolute,
+         glucose_abg_supine,
+         glucose_change_absolute,
+         fi_o2_supine,
+         fi_o2_change_absolute,
+         end_tidal_co2_marquette_supine,
+         et_co2_change_absolute,
+         peep_supine,
+         peep_change_absolute,
+         resp_rate_supine,
+         resp_rate_change_absolute,
+         heart_rate_supine,
+         arterial_pressure_systolic_supine,
+         white_cell_count_supine,
+         neutrophils_supine,
+         lymphocytes_supine,
+         c_reactive_protein_supine,
+         urea_supine,
+         pcre_supine,
+         haematocrit_supine,
+         platelet_count_supine,
+         albumin_supine,
+         aa_gradient_p_aco2_supine,
+         aa_paco2_change_absolute,
+         minute_volume_coalesced_supine,
+         minute_volume_change_absolute,
+         mean_airway_pressure_coalesced_supine,
+         mean_airway_pressure_change_absolute,
+         peak_pressure_coalesced_supine,
+         peak_pressure_change_absolute,
+         hydrogen_ion_abg_nmolL_supine,
+         hydrogen_ion_absolute,
+         predicted_weight,
+         pf_ratio_supine,
+         pfr_change_absolute,
+         gender,
+         age_years,
+         height_cm,
+         weight_kg,
+         ards_type,
+         apache_ii,
+         time_between_abg,
+         outcome)
+
+rm(pre_post_changes)
+```
+
+# Building the model
+
+## Create folds
+
+Uses `rsample` package.
+
+```{r lr_folds}
+#| warning: false
+
+data_folds <- vfold_cv(data = pre_post_refined, v = folds, strata = outcome)
+```
+
+## Prepare data
+
+Uses `recipes` package. We must now create a recipe for the LR process. We will leave imputation to later, as it will be needed in each fold twice (training and testing data). This recipe:
+
+- removes variables with > 5% data missing
+- removes all numeric variables with a correlation > 0.8
+- removes any variables possessing a single value
+- creates dummy variables via one-hot encoding for all variables that are factors
+
+Imputation of NA values (via bagged trees) will be done during the model fitting process.
+
+```{r lr_recipe}
+#| warning: false
+#| output: false
+
+lr_rec <- recipe(pre_post_refined, formula =  ~ .) %>% 
+  step_rm(fi_o2_change_absolute,
+          resp_rate_supine,
+          resp_rate_change_absolute,
+          heart_rate_supine,
+          arterial_pressure_systolic_supine) %>% 
+  step_filter_missing(all_predictors(), threshold = 0.05) %>% # leave only vars with <5% NA
+  step_corr(all_numeric_predictors(), threshold = 0.8) %>% 
+  step_zv(all_predictors()) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  prep()
+```
+
+## Model fitting
+
+```{r lr_with_AIC_loop}
+#| warning: false
+
+# initiate empty table that will store performance metrics
+lr_performance <- tibble(fold = 0,
+                         accuracy = 0,
+                         sensitivity = 0, 
+                         specificity = 0, 
+                         f_measure = 0, 
+                         kappa = 0)
+
+# run a for loop that will fit the model to each of the folds
+for (i in 1:folds) {
+  data_lr_train <- data_folds$splits[[i]] %>% analysis()
+  data_lr_train <- bake(object = lr_rec, new_data = data_lr_train)
+  
+  lr_rec_2 <- recipe(data_lr_train, formula = ~ .) %>% 
+    step_impute_bag(all_predictors()) %>% 
+    prep()
+  
+  data_lr_train <- bake(object = lr_rec_2, 
+                      new_data = data_lr_train) %>% 
+  mutate(gender_m = as.factor(gender_m),
+         ards_type_Covid_19 = as.factor(ards_type_Covid_19),
+         ards_type_ARDSexp = as.factor(ards_type_ARDSexp),
+         ards_type_Unknown = as.factor(ards_type_Unknown),
+         outcome_rip = as.factor(outcome_rip))
+  
+  lr_model <- glm(data = data_lr_train,
+                  formula = outcome_rip ~ .,
+                  family = 'binomial') 
+  
+  data_lr_test <- data_folds$splits[[i]] %>% assessment()
+  data_lr_test <- bake(object = lr_rec, new_data = data_lr_test)
+  
+  data_lr_test <- bake(object = lr_rec_2, 
+                       new_data = data_lr_test) %>% 
+  mutate(gender_m = as.factor(gender_m),
+         ards_type_Covid_19 = as.factor(ards_type_Covid_19),
+         ards_type_ARDSexp = as.factor(ards_type_ARDSexp),
+         ards_type_Unknown = as.factor(ards_type_Unknown),
+         outcome_rip = as.factor(outcome_rip))
+  
+  threshold <- 0.5
+  
+  data_lr_test$rip_odds <- predict(object = lr_model,
+                                   newdata = data_lr_test,
+                                   type = 'response')
+  
+  data_lr_test$rip_odds <- as.numeric(data_lr_test$rip_odds)
+  
+  data_lr_test$pred_rip <- if_else(condition = data_lr_test$rip_odds > threshold,
+                                   true = 1,
+                                   false = 0)
+  
+  data_lr_test <- mutate(data_lr_test, pred_rip = as.factor(pred_rip))
+  
+  acc_lr <- accuracy(data = data_lr_test, truth = outcome_rip, estimate = pred_rip)
+  sens_lr <- sensitivity(data = data_lr_test, truth = outcome_rip, estimate = pred_rip)
+  spec_lr <- specificity(data = data_lr_test, truth = outcome_rip, estimate = pred_rip)
+  fmeas_lr <- f_meas(data = data_lr_test, truth = outcome_rip, estimate = pred_rip)
+  kappa_lr <- kap(data = data_lr_test, truth = outcome_rip, estimate = pred_rip)
+  
+  lr_performance<- add_row(lr_performance, 
+                           fold = i,
+                           accuracy = round(acc_lr$.estimate, 2),
+                           sensitivity = round(sens_lr$.estimate, 2),
+                           specificity = round(spec_lr$.estimate, 2),
+                           f_measure = round(fmeas_lr$.estimate, 2),
+                           kappa = round(kappa_lr$.estimate, 2))
+  
+}
+
+lr_performance <- lr_performance[2:(folds + 1), ]
+
+lr_summary <- summarise(lr_performance,
+                        accuracy_mean = mean(accuracy),
+                        sensitivity_mean = mean(sensitivity),
+                        specificity = mean(specificity),
+                        f_meas_mean = mean(f_measure),
+                        kappa_mean = mean(kappa))
+
+
+# tidy
+rm(acc_lr,
+   auroc_lr,
+   data_lr_test,
+   data_lr_train,
+   fmeas_lr,
+   kappa_lr,
+   lr_rec,
+   lr_rec_2,
+   sens_lr,
+   spec_lr,
+   i,
+   threshold)
+
+```
+
