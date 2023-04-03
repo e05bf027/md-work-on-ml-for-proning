@@ -36,7 +36,6 @@ set.seed(3.14)
 ```
 
 # Description of dataset
-Bla bla
 
 ```{r load_dataset}
 #| include: false
@@ -47,7 +46,7 @@ folds <- 5
 load('../data/pre_post_changes.Rda')
 ```
 
-Here are the columns in this dataset:
+There are a total of 169 columns in the dataset.
 
 ```{r}
 colnames(pre_post_changes)
@@ -167,8 +166,9 @@ lr_rec <- recipe(pre_post_refined, formula =  ~ .) %>%
 
 ## Model fitting
 
-```{r lr_with_AIC_loop}
+```{r lr_loop}
 #| warning: false
+#| output: false
 
 # initiate empty table that will store performance metrics
 lr_performance <- tibble(fold = 0,
@@ -264,5 +264,14 @@ rm(acc_lr,
    i,
    threshold)
 
+```
+
+The resulting averaged metrics of the logistic regression model are given below.
+
+```{r}
+#| echo: false
+#| warning: false
+
+lr_summary
 ```
 
