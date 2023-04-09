@@ -1,5 +1,5 @@
-# s02_prePost.R
-# ==================
+# assemble_pre_to_post.R
+# ======================
 # This script reads in both the 'demographics.Rda' data-frame and the 'pre_post_01.xlsx'
 # file (which consists of manually selected ABGs, etc. from before and after instances
 # of prone-positioning) and reassembles them to generate a new dataframe that is a 
@@ -149,8 +149,10 @@ pre_post_wide <- pre_post_wide %>%
   left_join(demo_raw, by = 'patient_id') 
 
 
-# ADD NEW COLS TO DESCRIBE ABSOLUTE AND PERCENT DIFFERENCES POST PRONING
-# ========================================
+# add new cols to describe amount a variable changes during proning, and how 
+# much change is 'retained' (i.e. what is the difference in the variable when
+# returned supine).
+# ===========================================================================
 pre_post_changes <- pre_post_wide %>% 
   mutate(time_between_abg = time_since_adm_days_prone - time_since_adm_days_supine,
          sa_o2_change_absolute = sa_o2_systemic_prone - sa_o2_systemic_supine,
@@ -239,24 +241,14 @@ pre_post_changes <- pre_post_changes %>%
          outcome = factor(outcome))
 
 
-## add if the patient died within 3, 5, 7 days of that episode of proning
-# ===========================
-# Die within 72 hours (3 days)
-pre_post_changes$die_in_72 <-  if_else(pre_post_changes$outcome == 'rip' & (pre_post_changes$dc_date_time - pre_post_changes$time_prone < 72),
-                                       TRUE, FALSE)
+## add if the patient died within 28 days of returning supine
+# ===========================================================
+pre_post_changes$mortality_28 <- if_else(condition = pre_post_changes$outcome == 'rip' &
+                                           (pre_post_changes$dc_date_time - pre_post_changes$time_supine_post) / 24 < 28,
+                                         true = 'T',
+                                         false = 'F')
 
-# Die within 120 hours (5 days)
-pre_post_changes$die_in_120 <-  if_else(pre_post_changes$outcome == 'rip' & (pre_post_changes$dc_date_time - pre_post_changes$time_prone < 120),
-                                        TRUE, FALSE)
-
-# Die within 168 hours (7 days)
-pre_post_changes$die_in_168 <-  if_else(pre_post_changes$outcome == 'rip' & (pre_post_changes$dc_date_time - pre_post_changes$time_prone < 168),
-                                        TRUE, FALSE)
-
-pre_post_changes <- pre_post_changes %>% 
-  mutate(die_in_72 = as.logical(die_in_72),
-         die_in_120 = as.logical(die_in_120),
-         die_in_168 = as.logical(die_in_168))
+pre_post_changes$mortality_28 <- factor(pre_post_changes$mortality_28)
 
 # clean the result to remove many NA entries that have resulted
 pre_post_changes <- pre_post_changes %>% 
