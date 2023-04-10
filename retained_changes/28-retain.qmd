@@ -1,0 +1,92 @@
+---
+title: "There is no difference in 28 day mortality between patients who retain improvements in oxygenation following the initial session of prone positioning for moderate to severe ARDS"
+author: "David M Hannon"
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    linestretch: 1.15
+    mainfont: 'IBM Plex Serif'
+    sansfont: 'IBM Plex Serif'
+    fontsize: 7pt
+    toc: false
+    number-sections: false
+    geometry: 
+    - top=30mm
+    - bottom=30mm
+    - left=30mm
+    - right=30mm
+editor: 
+  markdown: 
+    wrap: 72
+bibliography: references.bib
+csl: american-medical-association.csl
+---
+
+```{r setup}
+#| include: false
+
+set.seed(3.14)
+library(tidyverse)
+load(file = '../data/pre_post_changes.Rda')
+```
+
+# Introduction
+
+The mortality of patients suffering from severe ARDS can be improved by
+being placed in the prone position. This document outlines a basic
+analysis of a dataset of patients from the ICU of University Hospital
+Galway who were invasively ventilated and placed in the prone position.
+
+# Methods
+
+Patients were classified as 'responders' or 'non-responders' based on a
+comparison of their PF ratio before and after their initial session of
+prone positioning. If their PF ratio was higher after returning to the
+supine position after their initial session of prone positioning, they
+were classified as 'responders'. If the PF ratio was less, they were
+classified as 'non-responders'. The 28-day-mortality of the patients was
+compared between these two groups.
+
+# Results
+
+```{r}
+#| include: false
+
+# add if patient responded
+pre_post_changes$pf_responder <- if_else(condition = (pre_post_changes$pf_ratio_supine_post - pre_post_changes$pf_ratio_supine) > 0,
+                                         true = 'responder', 
+                                         false = 'non-responder')
+
+# look at association between 28 day mortality and proning change retention
+changes_sess_01 <- pre_post_changes %>% 
+  filter(proning_session == 1)
+
+t <- table(changes_sess_01$mortality_28, changes_sess_01$pf_responder)
+rownames(t) <- c('alive in 28 days', 'died within 28 days')
+```
+
+A total of 127 sessions of prone positioning were analysed. The two
+groups were compared with Pearson's Chi-squared test. The results of
+initial grouping is below.
+
+\
+
+```{r}
+#| echo: false
+#| warning: false
+
+t
+```
+
+```{r}
+#| include: false
+chi <-  stats::chisq.test(changes_sess_01$pf_responder, changes_sess_01$mortality_28, correct = F)
+```
+
+\
+
+Statistical analysis showed $\chi^2$ (N = 127) = 0.06, $p$ = 0.94.
+
+# Conclusion
+There is no significant difference in 28 day mortality between patients who did and did not retain changes to their PF ratio after their initial session of prone positioning.
