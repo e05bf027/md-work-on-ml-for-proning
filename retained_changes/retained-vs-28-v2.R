@@ -40,6 +40,12 @@ stats::chisq.test(pre_post_sess1$vr_responder, pre_post_sess1$mortality_28, corr
 
 # PF RATIO
 # ========
+# isolate 
+pre_post_sess1 <- pre_post_changes %>% 
+  filter(proning_session == 1,
+         time_between_abg >= 0.25,
+         pf_ratio_supine <= 20)
+
 # # add if patient responded
 pre_post_sess1$pf_responder <- if_else(condition = (pre_post_sess1$pf_ratio_supine_post - pre_post_sess1$pf_ratio_supine) > 0,
                                        true = 'responder',
@@ -51,6 +57,3 @@ rownames(pf_table) <- c('lived for 28', 'died within 28')
 
 stats::chisq.test(pre_post_sess1$pf_responder, pre_post_sess1$mortality_28, correct = F)
   # no significant difference
-
-
-

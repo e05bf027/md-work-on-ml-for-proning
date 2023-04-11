@@ -26,6 +26,7 @@ csl: american-medical-association.csl
 ```{r setup}
 #| include: false
 
+rm(list = ls())
 set.seed(3.14)
 library(tidyverse)
 load(file = '../data/pre_post_changes.Rda')
@@ -40,33 +41,48 @@ Galway who were invasively ventilated and placed in the prone position.
 
 # Methods
 
-Patients were classified as 'responders' or 'non-responders' based on a
-comparison of their PF ratio before and after their initial session of
-prone positioning. If their PF ratio was higher after returning to the
-supine position after their initial session of prone positioning, they
-were classified as 'responders'. If the PF ratio was less, they were
-classified as 'non-responders'. The 28-day-mortality of the patients was
-compared between these two groups.
+The data was refined to include patients with moderate to severe ARDS
+(as oper the Berlin criteria). Their initial session of prone
+positioning was also isolated.
 
-# Results
+Patients were classified as 'responders' or 'non-responders' based on
+whether they retained beneficial changes to either POF ratio or
+Ventilatory Ratio after their initial session of prone positioning. If
+their PF ratio was higher after proning than before, they were
+classified as a 'responder'. If Ventilatory Ratio was lolwer after
+proning they were classified as a 'responder'. Otherwise, they were
+classified as a 'non-responder'. The 28-day-mortality of the patients
+was compared between these two groups.
 
 ```{r}
 #| include: false
 
-# add if patient responded
-pre_post_changes$pf_responder <- if_else(condition = (pre_post_changes$pf_ratio_supine_post - pre_post_changes$pf_ratio_supine) > 0,
-                                         true = 'responder', 
-                                         false = 'non-responder')
-
-# look at association between 28 day mortality and proning change retention
-changes_sess_01 <- pre_post_changes %>% 
-  filter(proning_session == 1)
-
-t <- table(changes_sess_01$mortality_28, changes_sess_01$pf_responder)
-rownames(t) <- c('alive in 28 days', 'died within 28 days')
+# refine the dataset - proning sessions over 6 hours, and mod-severe ARDS
+pre_post_sess1 <- pre_post_changes %>% 
+  filter(proning_session == 1,
+         time_between_abg >= 0.25,
+         pf_ratio_supine <= 20)
 ```
 
-A total of 127 sessions of prone positioning were analysed. The two
+
+# Results
+
+## PF ratio
+
+```{r}
+#| include: false
+
+# did patient respond?
+pre_post_sess1$pf_responder <- if_else(condition = (pre_post_sess1$pf_ratio_supine_post - pre_post_sess1$pf_ratio_supine) > 0,
+                                       true = 'responder',
+                                       false = 'non-responder')
+
+# see if any signal here
+pf_table <- table(pre_post_sess1$mortality_28, pre_post_sess1$pf_responder)
+rownames(pf_table) <- c('lived for 28', 'died within 28')
+```
+
+A total of 117 sessions of prone positioning were analysed. The two
 groups were compared with Pearson's Chi-squared test. The results of
 initial grouping is below.
 
@@ -76,17 +92,74 @@ initial grouping is below.
 #| echo: false
 #| warning: false
 
-t
+pf_table
 ```
+\
+
+Comparing the groups using Pearson's Chi Squared showed no significant difference.
 
 ```{r}
-#| include: false
-chi <-  stats::chisq.test(changes_sess_01$pf_responder, changes_sess_01$mortality_28, correct = F)
+#| echo: false
+#| warning: false
+
+stats::chisq.test(pre_post_sess1$pf_responder, pre_post_sess1$mortality_28, correct = F)
 ```
 
 \
 
-Statistical analysis showed $\chi^2$ (N = 127) = 0.06, $p$ = 0.94.
+There is no significant difference between the two groups.
+
+## Ventilatory Ratio
+
+```{r}
+#| include: false
+
+pre_post_sess1 <- pre_post_changes %>% 
+  filter(proning_session == 1,
+         time_between_abg >= 0.25,
+         pf_ratio_supine <= 20)
+
+# add if patient responded (was the 'retained' VR LOWER than before proning)
+pre_post_sess1$vr_responder <- if_else(condition = (pre_post_sess1$ventilatory_ratio_supine_post - pre_post_sess1$ventilatory_ratio_supine) < 0,
+                                       true = 'responder',
+                                       false = 'non-responder')
+
+pre_post_sess1$vr_responder <- factor(pre_post_sess1$vr_responder)
+
+pre_post_sess1 <- pre_post_sess1 %>% 
+  filter(is.na(pre_post_sess1$vr_responder) == F)
+
+# see if any signal here
+vr_table <- table(pre_post_sess1$mortality_28, pre_post_sess1$vr_responder)
+rownames(vr_table) <- c('lived for 28', 'died within 28')
+```
+
+The amount of cases analysed in this case was less than for PF ratio. This is due to the fact that to calculate Ventilatory ratio requires that we know the patient's height (to calculate Predicted Bodyweight), and this was missing in around 25% of cases. A total of 85 cases were analysed.
+
+Initial results show the following:
+
+\
+
+```{r}
+#| echo: false
+
+vr_table
+```
+
+\
+
+Comparing the groups using Pearson's Chi Squared showed no significant difference.
+
+```{r}
+#| echo: false
+
+stats::chisq.test(pre_post_sess1$vr_responder, pre_post_sess1$mortality_28, correct = F)
+```
+
+\
 
 # Conclusion
-There is no significant difference in 28 day mortality between patients who did and did not retain changes to their PF ratio after their initial session of prone positioning.
+
+There is no significant difference in 28 day mortality between patients
+who did and did not retain changes to their PF or Ventilatory ratio after their initial
+session of prone positioning.
