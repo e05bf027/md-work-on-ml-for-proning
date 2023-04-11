@@ -21,5 +21,5 @@ changes_sess_01 <- pre_post_changes %>%
 t <- table(changes_sess_01$mortality_28, changes_sess_01$pf_responder)
 rownames(t) <- c('lived for 28', 'died within 28')
 
-base::chisq.test(changes_sess_01$pf_responder, changes_sess_01$mortality_28, correct = F)
+stats::chisq.test(changes_sess_01$pf_responder, changes_sess_01$mortality_28, correct = F)
    # no significant difference 
