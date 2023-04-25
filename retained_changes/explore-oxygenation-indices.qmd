@@ -23,6 +23,17 @@ bibliography: references.bib
 csl: american-medical-association.csl
 ---
 
+```{r setup}
+#| include: false
+
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(gt)
+library(gtsummary)
+```
+
+
 # Introduction
 
 The Acute Respiratory Distress Syndrome (ARDS) was initially identified
@@ -79,6 +90,27 @@ receive a mortality benefit and in whom other therapies may be
 effective[@kawakami2022].
 
 # Population
+## Initial selection
+
+```{r load_data}
+#| include: false
+load(file = '../demographics/demographics.Rda')
+```
+
+This section shows details of the population involved in this study. The data was gathered by interrogating the Electronic Health Record system used in the Intensive Care Unit (ICU) of University Hospital Galway (UHG). The system was queried to return all patients on record whp fulfilled the following criteria:
+
+- over 18 years of age
+- invasively ventilated
+- placed in the prone position whilst invasively ventilated
+
+## Results of selection
+
+A total of `r nrow(demo_raw)` records were isolated from the servers. These records date from between 14/07/2013 and 20/03/2022. They consisted of patients who had been placed in the prone position secondary to a pulmonary insult (ARDSp), and extrapulmonary insult (ARDSexp), and Covid-19 (C-ARDS). Patients in the dataset were proned between `r min(demo_raw$total_proning_sessions)` and `r max(demo_raw$total_proning_sessions)` times. Full details of these demographics can be seen in Table 01.
+
+```{r table_01}
+
+```
+
 
 # Oxygenation indices
 
