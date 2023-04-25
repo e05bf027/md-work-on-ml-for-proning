@@ -1,0 +1,89 @@
+---
+title: "An exploration of oxygenation indices in proned patients"
+author: "David M. Hannon"
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    linestretch: 1.15
+    mainfont: 'IBM Plex Serif'
+    sansfont: 'IBM Plex Serif'
+    fontsize: 7pt
+    toc: false
+    number-sections: false
+    geometry: 
+    - top=30mm
+    - bottom=30mm
+    - left=30mm
+    - right=30mm
+editor: 
+  markdown: 
+    wrap: 72
+bibliography: references.bib
+csl: american-medical-association.csl
+---
+
+# Introduction
+
+The Acute Respiratory Distress Syndrome (ARDS) was initially identified
+as a clinical entity in the 1960s[@ashbaugh1967]. Pathophysiologically,
+ARDS consists of diffuse alveolar damage due to the activation of
+alveolar macrophages to release pro-inflammatory cytokines[@martin1999]
+that attract neutrophils to the lungs where they damage the alveolar and
+capillary epithelium by release of toxic mediators. This leads to the
+alveoli being filled with bloody, proteinaceous fluid. Consequently, the
+surfactant can no longer support the alveoli[@ware2001]. The end result
+is that these damaged alveoli lead to impaired gas exchange, which is
+the pathophysiolgic hallmark of ARDS.
+
+Patients with certain clinical conditions are at higher risk for
+developing ARDS. These can broadly be grouped into direct lung injury
+risk factors like pneumonia, aspiration, pulmonary contusion,
+inhalational injury, near drowning etc. (heretofore referred to as
+'ARDSp') and indirect lung injury risk factors such as sepsis,
+non-thoracic injuries/hemorrhagic shock, pancreatitis, burns,
+drugs/toxins, blood transfusions, cardiopulmonary bypass and reperfusion
+injury after lung transplant or embolectomy (which will now be referred
+to as 'ARDSexp')[@thompson2017].
+
+To date, there are no specific drugs or therapies available to directly
+treat/prevent ARDS. Mechanical ventilation that aims to protect injured
+lungs and minimize Ventilator Induced Lung Injury (VILI), and management
+of refractory hypoxaemia, are the keystones in supportive management of
+ARDS[@fan2017]. Part of the above can include placing a patient in the
+prone (i.e. 'face down') position. This was first described as a therapy
+for ARDS in the 1970s[@piehl1976]. The mechanism by which prone
+positioning improves oxygenation is multifactorial. It reduces the
+ventral to dorsal transpulmonary pressure difference,
+ventilation-perfusion mismatch and lung compression[@cornejo2013;
+@jozwiak2013]. Other potential physiological effects of prone
+positioning include a decrease in proinflammatory cytokines and
+improvement in RV dysfunction by preserving pulmonary
+circulation[@guérin2014].
+
+The first prospective randomized control trial (known as the 'PROSEVA'
+trial) that showed a mortality benefit from prolonged prone positioning
+was conducted in France and published in 2013[@guérin2013]. Earlier
+randomized control trials failed to show significant mortality benefit ,
+which was likely due inconsistent use of lung protective ventilation,
+shorter duration of prone positioning and application of prone
+positioning in patients with mild-moderate ARDS[@sud2014]. Prone
+positioning for at least 12 to 16 hours per day, while administering low
+tidal volumes (4-6ml/kg of ideal body weight), is now strongly
+recommended in ventilated patients with severe ARDS[@banavasi2021].
+
+Many questions regarding the utility and efficacy of the prone position
+remain. An important issue lies in identifying patients who, although
+they fit the criteria to undergo prone positioning, are unlikely to
+receive a mortality benefit and in whom other therapies may be
+effective[@kawakami2022].
+
+# Population
+
+# Oxygenation indices
+
+# Explorations & Comparisons
+
+
+\newpage
+# References
