@@ -67,7 +67,7 @@ Note that there are several missing values, as outlined below:
 -   Risk factor: a total of `r sum(is.na(demo_raw$ards_risk_factor))` values (`r round((sum(is.na(demo_raw$ards_risk_factor)) / nrow(demo_raw)) * 100, 1)`%) were not recorded
 -   Admitting location: a total of `r sum(is.na(demo_raw$adm_location))` values (`r round((sum(is.na(demo_raw$adm_location)) / nrow(demo_raw)) * 100, 1)`%) were not recorded
 
-This may have implications for any further calculations or applications that thgis data is used for.
+This may have implications for any further calculations or applications that this data is used for.
 
 
 ```{r demo_summ_table}
