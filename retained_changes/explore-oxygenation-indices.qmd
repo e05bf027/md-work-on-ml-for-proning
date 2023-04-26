@@ -33,19 +33,18 @@ library(gt)
 library(gtsummary)
 ```
 
-
 # Introduction
 
 The Acute Respiratory Distress Syndrome (ARDS) was initially identified
-as a clinical entity in the 1960s[@ashbaugh1967]. Pathophysiologically,
-ARDS consists of diffuse alveolar damage due to the activation of
-alveolar macrophages to release pro-inflammatory cytokines[@martin1999]
-that attract neutrophils to the lungs where they damage the alveolar and
-capillary epithelium by release of toxic mediators. This leads to the
-alveoli being filled with bloody, proteinaceous fluid. Consequently, the
-surfactant can no longer support the alveoli[@ware2001]. The end result
-is that these damaged alveoli lead to impaired gas exchange, which is
-the pathophysiolgic hallmark of ARDS.
+as a clinical entity in the 1960s[@ashbaugh1967]. ARDS consists of
+diffuse alveolar damage due to the activation of alveolar macrophages to
+release pro-inflammatory cytokines[@martin1999] that attract neutrophils
+to the lungs where they damage the alveolar and capillary epithelium by
+release of toxic mediators. This leads to the alveoli being filled with
+bloody, proteinaceous fluid. Consequently, the surfactant can no longer
+support the alveoli[@ware2001]. The end result is that these damaged
+alveoli lead to impaired gas exchange, which is the pathophysiolgic
+hallmark of ARDS.
 
 Patients with certain clinical conditions are at higher risk for
 developing ARDS. These can broadly be grouped into direct lung injury
@@ -55,7 +54,9 @@ inhalational injury, near drowning etc. (heretofore referred to as
 non-thoracic injuries/hemorrhagic shock, pancreatitis, burns,
 drugs/toxins, blood transfusions, cardiopulmonary bypass and reperfusion
 injury after lung transplant or embolectomy (which will now be referred
-to as 'ARDSexp')[@thompson2017].
+to as 'ARDSexp')[@thompson2017]. Severe lung injury secondary to
+Covid-19 has certain unique features, and has been termed
+'C-ARDS'[@gattinoni2020].
 
 To date, there are no specific drugs or therapies available to directly
 treat/prevent ARDS. Mechanical ventilation that aims to protect injured
@@ -69,16 +70,12 @@ ventral to dorsal transpulmonary pressure difference,
 ventilation-perfusion mismatch and lung compression[@cornejo2013;
 @jozwiak2013]. Other potential physiological effects of prone
 positioning include a decrease in proinflammatory cytokines and
-improvement in RV dysfunction by preserving pulmonary
+improvement in right ventricle dysfunction by preserving pulmonary
 circulation[@guérin2014].
 
 The first prospective randomized control trial (known as the 'PROSEVA'
 trial) that showed a mortality benefit from prolonged prone positioning
-was conducted in France and published in 2013[@guérin2013]. Earlier
-randomized control trials failed to show significant mortality benefit ,
-which was likely due inconsistent use of lung protective ventilation,
-shorter duration of prone positioning and application of prone
-positioning in patients with mild-moderate ARDS[@sud2014]. Prone
+was conducted in France and published in 2013[@guérin2013]. Prone
 positioning for at least 12 to 16 hours per day, while administering low
 tidal volumes (4-6ml/kg of ideal body weight), is now strongly
 recommended in ventilated patients with severe ARDS[@banavasi2021].
@@ -90,32 +87,168 @@ receive a mortality benefit and in whom other therapies may be
 effective[@kawakami2022].
 
 # Population
+
 ## Initial selection
 
-```{r load_data}
+```{r load_demo_data}
 #| include: false
 load(file = '../demographics/demographics.Rda')
 ```
 
-This section shows details of the population involved in this study. The data was gathered by interrogating the Electronic Health Record system used in the Intensive Care Unit (ICU) of University Hospital Galway (UHG). The system was queried to return all patients on record whp fulfilled the following criteria:
+This section shows details of the population involved in this study. The
+data was gathered by interrogating the Electronic Health Record system
+used in the Intensive Care Unit (ICU) of University Hospital Galway
+(UHG). The system was queried to return all patients on record whp
+fulfilled the following criteria:
 
-- over 18 years of age
-- invasively ventilated
-- placed in the prone position whilst invasively ventilated
+-   over 18 years of age
+-   invasively ventilated
+-   placed in the prone position whilst invasively ventilated
 
-## Results of selection
+## Study population
 
-A total of `r nrow(demo_raw)` records were isolated from the servers. These records date from between 14/07/2013 and 20/03/2022. They consisted of patients who had been placed in the prone position secondary to a pulmonary insult (ARDSp), and extrapulmonary insult (ARDSexp), and Covid-19 (C-ARDS). Patients in the dataset were proned between `r min(demo_raw$total_proning_sessions)` and `r max(demo_raw$total_proning_sessions)` times. Full details of these demographics can be seen in Table 01.
+A total of `r nrow(demo_raw)` records were isolated from the servers.
+These records date from between 14/07/2013 and 20/03/2022. They
+consisted of patients who had been placed in the prone position
+secondary to a pulmonary insult (ARDSp), and extrapulmonary insult
+(ARDSexp), and Covid-19 (C-ARDS). Patients in the dataset were proned
+between `r min(demo_raw$total_proning_sessions)` and
+`r max(demo_raw$total_proning_sessions)` times. Full details of these
+demographics can be seen overleaf in Table 01.
+
+\newpage
 
 ```{r table_01}
+#| echo: false
+#| warning: false
+#| tbl-cap: Study population demographics
+#| tbl-cap-location: bottom
 
+theme_gtsummary_journal(journal = 'nejm')
+
+demo_raw %>% 
+  select(-c(patient_id,
+            pathogenic_factor,
+            ards_risk_factor,
+            adm_date,
+            dc_date_time,
+            ventilator)) %>% 
+  tbl_summary(by = ards_type,
+              statistic = list(all_continuous() ~ "{mean} ({sd})",
+                               all_categorical() ~ "{n} ({p}%)"),
+              label = list(gender ~ 'Gender',
+                           age_years ~ 'Age (years)',
+                           height_cm ~ 'Height (cm)',
+                           weight_kg ~ 'Weight (kg)',
+                           bmi ~ 'BMI',
+                           adm_location ~ 'Admitting location',
+                           los_days ~ 'LOS (days)',
+                           apache_ii ~ 'Apache II',
+                           total_proning_sessions ~ 'Proning sessions',
+                           outcome ~ 'Outcome'),
+              missing = 'ifany',
+              missing_text = 'Not recorded') %>% 
+  bold_labels() %>% 
+  add_overall()
 ```
 
+\newpage
+
+## Data gathered around prone-positioning
+
+```{r load_phys_data}
+#| include: false
+
+load(file = '../data/pre_post_changes.Rda')
+```
+
+For each patient, values relating to ventilation and oxygenation were
+isolated around every session of prone positioning that took place
+whilst the patient was invasively ventilated. The following values were
+recorded:
+
+[Ventilation]{.underline}
+
+-   Fraction of inspired oxygen (FiO~2~)
+-   Minute Volume (MV), measured in L/min
+-   Positive End-Expiratory Pressure (PEEP), measured in cmH~2~O
+-   Peak Inspiratory Pressure (PIP), measured in cmH~2~O
+-   Mean Airway Pressure (P~aw~), measured in cmH~2~O
+
+[Oxygenation]{.underline}
+
+-   peripheral oxygen saturation (SpO~2~), recorded using bedside pulse
+    oximetry
+-   saturation of oxygen (SaO~2~), recorded from arterial blood gas
+-   partial pressure of oxygen (PaO~2~), recorded from arterial blood
+    gas
+
+[Other]{.underline}
+
+-   partial pressure of carbon dioxide (PaCO~2~), recorded from arterial
+    blood gas
+-   haemoglobin concentration (g/dL), recorded from arterial blood gas
 
 # Oxygenation indices
 
+## Overview
+
+The following indices of oxygenation will be examined. Some have been
+recorded directly from monitoring equipment to which the patient was
+attached in ICU, and some have been calculated. The indexes are outlined
+below. Summary statistics and an overview of the distribution for each
+variable follows.
+
+The following recorded *directly*:
+
+-   SpO~2~
+-   SaO~2~
+-   PaO~2~
+
+The following were *calculated* from recorded values:
+
+-   P/F ratio
+-   Ventilatory ratio
+-   Oxygenation index
+-   Oxygenation factor
+-   A-a O~2~ gradient
+-   Arterial O~2~ content (CaO~2~)
+
+## P/F ratio
+
+PaO~2~/FiO~2~ ratio is the ratio of arterial oxygen partial pressure to
+fractional inspired oxygen. The equation is:
+
+$$ {P/F \ ratio} = \frac {PaO_2}{FiO_2} $$
+
+```{r pf_ratio}
+#| include: false
+```
+
+## Ventilatory ratio
+
+$$  Ventilatory \ ratio = \frac{MV \times Pa_{CO_2}}{{PBW \times 100 \times 5}}   $$
+
+## Oxygenation index
+
+$$ Oxygenation \ index = \frac{FiO_2 \times P_{AW}}{PaO_2}  $$
+
+## Oxygenation factor
+
+$$ Oxygenation \ factor = \frac{PF \ ratio}{P_{AW}}  $$
+
+
+## A-a O~2~ gradient
+
+$$ A-a \ gradient = [FiO_2 \times (P_{atm} - P_{H_2O}) - \frac{Pa_{CO_2}}{0.8}] - Pa_{O_2}$$
+
+## Arterial O~2~ content
+
+$$ Ca_{O_2} = (1.34 \times [Hb] \times Sp_{O_2}) \ + \ (0.0225 \times Pa_{O_2})  $$
+
+
 # Explorations & Comparisons
 
-
 \newpage
+
 # References
