@@ -81,9 +81,11 @@ pre_post_raw$predicted_weight[pre_post_raw$patient_id == 'patient_167'] <- 46.0
 
 # Now add the indices PF ratio, Oxygenation Factor, Ventilatory Ratio
 pre_post_raw <- pre_post_raw %>%
-  mutate(oxy_factor = pa_o2 / fi_o2 * mean_airway_pressure_coalesced,
+  mutate(pf_ratio = pa_o2 / fi_o2,
          ventilatory_ratio = (minute_volume_coalesced * 100) * pa_co2 / (100 * predicted_weight) * 5,
-         pf_ratio = pa_o2 / fi_o2)
+         oxy_index = fi_o2 * mean_airway_pressure_coalesced / pa_o2,
+         oxy_factor = (pa_o2 / fi_o2) / mean_airway_pressure_coalesced,
+         ca_o2 = (1.34 * total_haemoglobin * sa_o2_systemic) + (0.0225 * pa_o2))
 
 # replace and recalculate the aa gradient column
 pre_post_raw <- pre_post_raw %>% 
@@ -214,11 +216,17 @@ pre_post_changes <- pre_post_wide %>%
          pfr_change_absolute = pf_ratio_prone - pf_ratio_supine,
          pfr_retain_absolute = pf_ratio_supine_post - pf_ratio_supine,
          
-         oxy_factor_change_absolute = oxy_factor_prone - oxy_factor_supine,
-         oxy_factor_retain_absolute = oxy_factor_prone - oxy_factor_supine,
-         
          vent_ratio_change_absolute = ventilatory_ratio_prone - ventilatory_ratio_supine,
          vent_ratio_retain_absolute = ventilatory_ratio_supine_post - ventilatory_ratio_supine,
+         
+         oxy_index_change_absolute = oxy_index_prone - oxy_index_supine,
+         oxy_index_retain_absolute = oxy_index_supine_post - oxy_index_supine,
+         
+         ca_o2_change_absolute = ca_o2_prone - ca_o2_supine,
+         ca_o2_retain_absolute = ca_o2_supine_post - ca_o2_supine,
+         
+         oxy_factor_change_absolute = oxy_factor_prone - oxy_factor_supine,
+         oxy_factor_retain_absolute = oxy_factor_supine_post - oxy_factor_supine,
          
          aa_p_aco2_change_absolute = aa_gradient_p_aco2_prone - aa_gradient_p_aco2_supine,
          aa_p_aco2_retain_absolute = aa_gradient_p_aco2_supine_post - aa_gradient_p_aco2_supine,
