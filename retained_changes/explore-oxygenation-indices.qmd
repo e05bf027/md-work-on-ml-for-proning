@@ -9,11 +9,13 @@ format:
     mainfont: 'IBM Plex Serif'
     sansfont: 'IBM Plex Serif'
     fontsize: 7pt
+    # header-includes:
+      # - \usepackage[document]{ragged2e} LEFT ALIGN
     toc: false
     number-sections: false
     geometry: 
     - top=30mm
-    - bottom=30mm
+    - bottom=25mm
     - left=30mm
     - right=30mm
 editor: 
@@ -31,6 +33,7 @@ library(readxl)
 library(janitor)
 library(gt)
 library(gtsummary)
+library(reshape2)
 ```
 
 # Introduction
@@ -116,13 +119,8 @@ between `r min(demo_raw$total_proning_sessions)` and
 `r max(demo_raw$total_proning_sessions)` times. Full details of these
 demographics can be seen overleaf in Table 01.
 
-\newpage
-
 ```{r table_01}
-#| echo: false
-#| warning: false
-#| tbl-cap: Study population demographics
-#| tbl-cap-location: bottom
+#| include: false
 
 theme_gtsummary_journal(journal = 'nejm')
 
@@ -133,6 +131,10 @@ demo_raw %>%
             adm_date,
             dc_date_time,
             ventilator)) %>% 
+  mutate(ards_type = factor(ards_type, levels = c('Covid_19', 
+                                                  'ARDSp',
+                                                  'ARDSexp',
+                                                  'Unknown'))) %>% 
   tbl_summary(by = ards_type,
               statistic = list(all_continuous() ~ "{mean} ({sd})",
                                all_categorical() ~ "{n} ({p}%)"),
@@ -149,8 +151,15 @@ demo_raw %>%
               missing = 'ifany',
               missing_text = 'Not recorded') %>% 
   bold_labels() %>% 
-  add_overall()
+  add_overall() %>% 
+  as_gt() %>% 
+  gtsave(path = '../images', filename = 'demo_tab.png')
 ```
+
+\
+
+![Summary of patient
+demographics](../images/demo_tab.png){fig-align="center" width="11cm"}
 
 \newpage
 
@@ -160,6 +169,8 @@ demo_raw %>%
 #| include: false
 
 load(file = '../data/pre_post_changes.Rda')
+pre_post_01 <- filter(pre_post_changes, proning_session == 1)  # only session 1 needed for this
+rm(pre_post_changes)
 ```
 
 For each patient, values relating to ventilation and oxygenation were
@@ -189,15 +200,21 @@ recorded:
     blood gas
 -   haemoglobin concentration (g/dL), recorded from arterial blood gas
 
-# Oxygenation indices
+These values were recorded at three key time-points. One ABG and
+corresponding venstilatory values were recorded from immediately before
+being turned to the prone position. The same set of values was recorded
+at the end of the session of prone positioning, prior to returning to
+the supine position. Finally, recordings were taken from within four
+hours of returning to the supine position.
 
-## Overview
+\newpage
+
+# Oxygenation indices
 
 The following indices of oxygenation will be examined. Some have been
 recorded directly from monitoring equipment to which the patient was
 attached in ICU, and some have been calculated. The indexes are outlined
-below. Summary statistics and an overview of the distribution for each
-variable follows.
+below.
 
 The following recorded *directly*:
 
@@ -214,41 +231,531 @@ The following were *calculated* from recorded values:
 -   A-a O~2~ gradient
 -   Arterial O~2~ content (CaO~2~)
 
+The above have been documented and the data relating to the initial
+session of prone position were analysed. The following pages contain a
+series of boxplots allowing a rapid visual assessment of the presence or
+absence of trends.
+
+\newpage
+
 ## P/F ratio
 
-PaO~2~/FiO~2~ ratio is the ratio of arterial oxygen partial pressure to
-fractional inspired oxygen. The equation is:
+PaO~2~/FiO~2~ ratio (PFR) is the ratio of arterial oxygen partial
+pressure to fractional inspired oxygen. The equation used to calculate
+it is given below.
+
+\
 
 $$ {P/F \ ratio} = \frac {PaO_2}{FiO_2} $$
 
-```{r pf_ratio}
+```{r pfr_graphs}
 #| include: false
+
+# pf ratio at certain positions
+pre_post_01 %>% 
+  select(pf_ratio_supine,
+         pf_ratio_prone,
+         pf_ratio_supine_post,
+         mortality_28) %>% 
+  rename('PFR (pre-prone)' = pf_ratio_supine,
+         'PFR (end of proning)' = pf_ratio_prone,
+         'PFR (post-prone)' = pf_ratio_supine_post) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'PFR', limits = c(0, 70)) +
+  labs(col = '28-day mortality') +
+  theme_light() +
+  theme(legend.position = 'none')
+
+ggsave('pfr_position.png', path = '../images')
+
+
+# pf ratio changes 
+pre_post_01 %>% 
+  select(pfr_change_absolute,
+         pfr_retain_absolute,
+         mortality_28) %>% 
+  rename('Change during proning' = pfr_change_absolute,
+         'Value relative to baseline' = pfr_retain_absolute) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'PFR', limits = c(-20, 55)) +
+  labs(col = '28-day mortality') +
+  theme_light()
+
+ggsave('pfr_changes.png', path = '../images')
 ```
+
+\
+
+Below are boxplots that allow for a basic visual assessment of the
+distribution of the data. It shows the data separated by 28 day
+mortality from the patients initial session of prone positioning.
+
+::: {#fig-pfrs layout-ncol="2"}
+![PFR by position](../images/pfr_position.png){#fig-pfr_position}
+
+![PFR changes](../images/pfr_changes.png){#fig-pfr_changes}
+
+PF ratio around initial session of prone positioning
+:::
+
+```{r pfr_table}
+#| include: false
+
+pre_post_01 %>% 
+  select(pf_ratio_supine,
+         pf_ratio_prone,
+         pf_ratio_supine_post,
+         pfr_change_absolute,
+         pfr_retain_absolute,
+         mortality_28) %>% 
+  dplyr::mutate(mortality_28 = factor(mortality_28, levels = c('T', 'F'))) %>% 
+  tbl_summary(by = mortality_28,
+              missing = 'no',
+              statistic = all_continuous() ~ '{mean}',
+              label = list(pf_ratio_supine ~ 'Before proning (supine)',
+                           pf_ratio_prone ~ 'At end of proning (prone)',
+                           pf_ratio_supine_post ~ 'After proning (supine)',
+                           pfr_change_absolute ~ 'Change during proning session',
+                           pfr_retain_absolute ~ 'Change relative to before proning')) %>% 
+  add_ci(pattern = '{stat} ({ci})') %>% 
+  add_p() %>% 
+  modify_header(label ~ md('**Patient position**')) %>% 
+  modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
+  as_gt() %>% 
+  gtsave(path = '../images', filename = 'pfr_table.png')
+```
+
+\
+
+The table below shows the mean and 95% confidence intervals for the
+patients in the study.
+
+![Response of PFR to initial session of prone
+positioning](../images/pfr_table.png){fig-align="center" width="10cm"}
+
+\newpage
 
 ## Ventilatory ratio
 
+The ventilatory ratio (VR) is a simple bedside index that can be
+calculated using routinely measured respiratory variables and is a
+measure of impaired ventilation.
+
+\
+
 $$  Ventilatory \ ratio = \frac{MV \times Pa_{CO_2}}{{PBW \times 100 \times 5}}   $$
+
+\
+
+```{r vr_graphs}
+#| include: false
+
+# VR by position
+pre_post_01 %>% 
+  select(ventilatory_ratio_supine,
+         ventilatory_ratio_prone,
+         ventilatory_ratio_supine_post,
+         mortality_28) %>% 
+  rename('VR (pre-prone)' = ventilatory_ratio_supine,
+         'VR (end of proning)' = ventilatory_ratio_prone,
+         'VR (after resupination)' = ventilatory_ratio_supine_post) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'VR', limits = c(0, 10)) +
+  labs(col = '28-day mortality') +
+  theme_light() +
+  theme(legend.position = 'none')
+
+ggsave('vr_position.png', path = '../images')
+
+
+# changes in VR
+pre_post_01 %>% 
+  select(vent_ratio_change_absolute,
+         vent_ratio_retain_absolute,
+         mortality_28) %>% 
+  rename('Change during proning' = vent_ratio_change_absolute,
+         'Value relative to baseline' = vent_ratio_retain_absolute) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'VR', limits = c(-2.5, 3.5)) +
+  labs(col = '28-day mortality') +
+  theme_light()
+
+ggsave('vr_changes.png', path = '../images')
+```
+
+Below are boxplots that allow for a basic visual assessment of the
+distribution of the data. It shows the data separated by 28 day
+mortality from the patients initial session of prone positioning.
+
+::: {#fig-vr layout-ncol="2"}
+![VR by position](../images/vr_position.png){#fig-vr_position}
+
+![VR changes](../images/vr_changes.png){#fig-vr_changes}
+
+Ventilatory ratio around initial session of prone positioning
+:::
+
+\
+
+```{r vr_table}
+#| include: false
+
+pre_post_01 %>% 
+  select(ventilatory_ratio_supine,
+         ventilatory_ratio_prone,
+         ventilatory_ratio_supine_post,
+         vent_ratio_change_absolute,
+         vent_ratio_retain_absolute,
+         mortality_28) %>% 
+  dplyr::mutate(mortality_28 = factor(mortality_28, levels = c('T', 'F'))) %>% 
+  tbl_summary(by = mortality_28,
+              missing = 'no',
+              statistic = all_continuous() ~ '{mean}',
+              label = list(ventilatory_ratio_supine ~ 'Before proning (supine)',
+                           ventilatory_ratio_prone ~ 'At end of proning (prone)',
+                           ventilatory_ratio_supine_post ~ 'After proning (supine)',
+                           vent_ratio_change_absolute ~ 'Change during proning session',
+                           vent_ratio_retain_absolute ~ 'Change relative to before proning')) %>% 
+  add_ci(pattern = '{stat} ({ci})') %>% 
+  add_p() %>% 
+  modify_header(label ~ md('**Patient position**')) %>% 
+  modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
+  as_gt() %>% 
+  gtsave(path = '../images', filename = 'vr_table.png')
+```
+
+\
+The table below shows the mean and 95% confidence intervals for the
+patients in the study.
+
+![Response of VR to initial session of prone
+positioning](../images/vr_table.png){fig-align="center" width="10cm"}
+
+\newpage
 
 ## Oxygenation index
 
+This oxygenation index can be an important prognostic indicator,
+especially in paediatric patients. It can assist in determining the need
+for ECMO.
+
+\
+
 $$ Oxygenation \ index = \frac{FiO_2 \times P_{AW}}{PaO_2}  $$
+\
+
+```{r oi_graphs}
+#| include: false
+
+# Oxygenation index by position
+pre_post_01 %>% 
+  select(oxy_index_supine,
+         oxy_index_prone,
+         oxy_index_supine_post,
+         mortality_28) %>% 
+  rename('O2 index (pre-prone)' = oxy_index_supine,
+         'O2 index (end of proning)' = oxy_index_prone,
+         'O2 index (after resupination)' = oxy_index_supine_post) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'O2 index', limits = c(0, 2)) +
+  labs(col = '28-day mortality') +
+  theme_light() +
+  theme(legend.position = 'none') 
+
+ggsave('oi_position.png', path = '../images')
+
+
+# changes in oxygenation index
+pre_post_01 %>% 
+  select(oxy_index_change_absolute,
+         oxy_index_retain_absolute,
+         mortality_28) %>% 
+  rename('Change during proning' = oxy_index_change_absolute,
+         'Value relative to baseline' = oxy_index_retain_absolute) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'O2 Index', limits = c(-1, 1)) +
+  labs(col = '28-day mortality') +
+  theme_light()
+
+ggsave('oi_changes.png', path = '../images')
+```
+
+Below are boxplots that allow for a basic visual assessment of the
+distribution of the data. It shows the data separated by 28 day
+mortality from the patients initial session of prone positioning.
+
+::: {#fig-oxy_index layout-ncol="2"}
+![O2 index by position](../images/oi_position.png){#fig-oi_position}
+
+![O2 index changes](../images/oi_changes.png){#fig-oi_changes}
+
+Oxygenation index around initial session of prone positioning
+:::
+
+```{r oi_table}
+#| include: false
+
+pre_post_01 %>% 
+  select(oxy_index_supine,
+         oxy_index_prone,
+         oxy_index_supine_post,
+         oxy_index_change_absolute,
+         oxy_index_retain_absolute,
+         mortality_28) %>% 
+  dplyr::mutate(mortality_28 = factor(mortality_28, levels = c('T', 'F'))) %>% 
+  tbl_summary(by = mortality_28,
+              missing = 'no',
+              statistic = all_continuous() ~ '{mean}',
+              label = list(oxy_index_supine ~ 'Before proning (supine)',
+                           oxy_index_prone ~ 'At end of proning (prone)',
+                           oxy_index_supine_post ~ 'After proning (supine)',
+                           oxy_index_change_absolute ~ 'Change during proning session',
+                           oxy_index_retain_absolute ~ 'Change relative to before proning')) %>% 
+  add_ci(pattern = '{stat} ({ci})') %>% 
+  add_p() %>% 
+  modify_header(label ~ md('**Patient position**')) %>% 
+  modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
+  as_gt() %>% 
+  gtsave(path = '../images', filename = 'oi_table.png')
+```
+
+\
+
+The table below shows the mean and 95% confidence intervals for the
+patients in the study.
+
+![Response of Oxygenation Index to initial session of prone
+positioning](../images/oi_table.png){fig-align="center" width="10cm"}
+
+\newpage
 
 ## Oxygenation factor
+This index is similar to the above, and is essentially the PF ratio normalised for the mean airway pressure at the time of measure.
+
+\
 
 $$ Oxygenation \ factor = \frac{PF \ ratio}{P_{AW}}  $$
+\
+
+```{r of_graphs}
+#| include: false
+
+# Oxygenation factor by position
+pre_post_01 %>% 
+  slice(-48) %>%  # Inf values in this row causing problems
+  select(oxy_factor_supine,
+         oxy_factor_prone,
+         oxy_factor_supine_post,
+         mortality_28) %>% 
+  rename('O2 Factor (pre-prone)' = oxy_factor_supine,
+         'O2 Factor (end of proning)' = oxy_factor_prone,
+         'O2 Factor (after resupination)' = oxy_factor_supine_post) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'O2 Factor', limits = c(-5, 50)) +
+  labs(col = '28-day mortality') +
+  theme_light() +
+  theme(legend.position = 'none') 
+
+ggsave('of_position.png', path = '../images')
+
+
+# changes in oxygenation index
+pre_post_01 %>% 
+  slice(-48) %>%  # Inf values in this row causing problems
+  select(oxy_factor_change_absolute,
+         oxy_factor_retain_absolute,
+         mortality_28) %>% 
+  filter(oxy_factor_change_absolute != Inf,
+         oxy_factor_retain_absolute != Inf) %>% 
+  rename('Change during proning' = oxy_factor_change_absolute,
+         'Value relative to baseline' = oxy_factor_retain_absolute) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'O2 Factor', limits = c(-5, 50)) +
+  labs(col = '28-day mortality') +
+  theme_light()
+
+ggsave('of_changes.png', path = '../images')
+```
+
+Below are boxplots that allow for a basic visual assessment of the
+distribution of the data. It shows the data separated by 28 day
+mortality from the patients initial session of prone positioning.
+
+::: {#fig-of layout-ncol="2"}
+![OF by position](../images/of_position.png){#fig-of_position}
+
+![OF changes](../images/of_changes.png){#fig-of_changes}
+
+Oxygenation factor around initial session of prone positioning
+:::
+
+```{r of_table}
+#| include: false
+
+pre_post_01 %>% 
+  slice(-48) %>%  # Inf values in this row causing problems
+  select(oxy_factor_supine,
+         oxy_factor_prone,
+         oxy_factor_supine_post,
+         oxy_factor_change_absolute,
+         oxy_factor_retain_absolute,
+         mortality_28) %>% 
+  dplyr::mutate(mortality_28 = factor(mortality_28, levels = c('T', 'F'))) %>% 
+  tbl_summary(by = mortality_28,
+              missing = 'no',
+              statistic = all_continuous() ~ '{mean}',
+              label = list(oxy_factor_supine ~ 'Before proning (supine)',
+                           oxy_factor_prone ~ 'At end of proning (prone)',
+                           oxy_factor_supine_post ~ 'After proning (supine)',
+                           oxy_factor_change_absolute ~ 'Change during proning session',
+                           oxy_factor_retain_absolute ~ 'Change relative to before proning')) %>% 
+  add_ci(pattern = '{stat} ({ci})') %>% 
+  add_p() %>% 
+  modify_header(label ~ md('**Patient position**')) %>% 
+  modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
+  as_gt() %>% 
+  gtsave(path = '../images', filename = 'of_table.png')
+```
+
+\
+
+The table below shows the mean and 95% confidence intervals for the
+patients in the study.
+
+![Response of Oxygenation factor to initial session of prone
+positioning](../images/of_table.png){fig-align="center" width="10cm"}
+
+\newpage
 
 
 ## A-a O~2~ gradient
+This calculation allows one to broadly determine the source of hypoxaemia in a patient. It also acts as an imperfect surrogate to measure the magnitude of shunt
+
+\
 
 $$ A-a \ gradient = [FiO_2 \times (P_{atm} - P_{H_2O}) - \frac{Pa_{CO_2}}{0.8}] - Pa_{O_2}$$
+
+\
+
+```{r aa_grad_graphs}
+#| include: false
+
+# aa gradient at certain positions
+pre_post_01 %>% 
+  select(aa_gradient_paco2_supine,
+         aa_gradient_paco2_prone,
+         aa_gradient_paco2_supine_post,
+         mortality_28) %>% 
+  rename('A-a gradient (pre-prone)' = aa_gradient_paco2_supine,
+         'A-a gradient (end of proning)' = aa_gradient_paco2_prone,
+         'A-a gradient (post-prone)' = aa_gradient_paco2_supine_post) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'PFR', limits = c(0, 80)) +
+  labs(col = '28-day mortality') +
+  theme_light() +
+  theme(legend.position = 'none')
+
+ggsave('aa_grad_position.png', path = '../images')
+
+
+# aa gradient changes 
+pre_post_01 %>% 
+  select(aa_paco2_change_absolute,
+         aa_paco2_retain_absolute,
+         mortality_28) %>% 
+  rename('Change during proning' = aa_paco2_change_absolute,
+         'Value relative to baseline' = aa_paco2_retain_absolute) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  ggplot(aes(x = variable, y = value, col = mortality_28)) +
+  geom_boxplot() +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'PFR', limits = c(-70, 25)) +
+  labs(col = '28-day mortality') +
+  theme_light()
+
+ggsave('aa_grad_changes.png', path = '../images')
+```
+
+Below are boxplots that allow for a basic visual assessment of the
+distribution of the data. It shows the data separated by 28 day
+mortality from the patients initial session of prone positioning.
+
+::: {#fig-aa_grad layout-ncol="2"}
+![Aa gradient by position](../images/aa_grad_position.png){#fig-aa_position}
+
+![Aa gradient changes](../images/aa_grad_changes.png){#fig-aa_changes}
+
+A-a gradient around initial session of prone positioning
+:::
+
+
+```{r aa_grad_table}
+#| include: false
+
+pre_post_01 %>% 
+  select(aa_gradient_paco2_supine,
+         aa_gradient_paco2_prone,
+         aa_gradient_paco2_supine_post,
+         aa_paco2_change_absolute,
+         aa_paco2_retain_absolute,
+         mortality_28) %>% 
+  dplyr::mutate(mortality_28 = factor(mortality_28, levels = c('T', 'F'))) %>% 
+  tbl_summary(by = mortality_28,
+              missing = 'no',
+              statistic = all_continuous() ~ '{mean}',
+              label = list(aa_gradient_paco2_supine ~ 'Before proning (supine)',
+                           aa_gradient_paco2_prone ~ 'At end of proning (prone)',
+                           aa_gradient_paco2_supine_post ~ 'After proning (supine)',
+                           aa_paco2_change_absolute ~ 'Change during proning session',
+                           aa_paco2_retain_absolute ~ 'Change relative to before proning')) %>% 
+  add_ci(pattern = '{stat} ({ci})') %>% 
+  add_p() %>% 
+  modify_header(label ~ md('**Patient position**')) %>% 
+  modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
+  as_gt() %>% 
+  gtsave(path = '../images', filename = 'aa_grad_table.png')
+```
+
+\
+
+![Response of A-a O2 gradient to initial session of prone
+positioning](../images/aa_grad_table.png){fig-align="center" width="10cm"}
+
+
+\newpage
 
 ## Arterial O~2~ content
 
 $$ Ca_{O_2} = (1.34 \times [Hb] \times Sp_{O_2}) \ + \ (0.0225 \times Pa_{O_2})  $$
 
-
-# Explorations & Comparisons
-
 \newpage
+
 
 # References
