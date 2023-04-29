@@ -324,7 +324,7 @@ pre_post_01 %>%
                            pfr_change_absolute ~ 'Change during proning session',
                            pfr_retain_absolute ~ 'Change relative to before proning')) %>% 
   add_ci(pattern = '{stat} ({ci})') %>% 
-  add_p() %>% 
+  add_p(everything() ~'aov') %>% 
   modify_header(label ~ md('**Patient position**')) %>% 
   modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
   as_gt() %>% 
@@ -429,7 +429,7 @@ pre_post_01 %>%
                            vent_ratio_change_absolute ~ 'Change during proning session',
                            vent_ratio_retain_absolute ~ 'Change relative to before proning')) %>% 
   add_ci(pattern = '{stat} ({ci})') %>% 
-  add_p() %>% 
+  add_p(everything() ~'aov') %>% 
   modify_header(label ~ md('**Patient position**')) %>% 
   modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
   as_gt() %>% 
@@ -530,7 +530,7 @@ pre_post_01 %>%
                            oxy_index_change_absolute ~ 'Change during proning session',
                            oxy_index_retain_absolute ~ 'Change relative to before proning')) %>% 
   add_ci(pattern = '{stat} ({ci})') %>% 
-  add_p() %>% 
+  add_p(everything() ~'aov') %>% 
   modify_header(label ~ md('**Patient position**')) %>% 
   modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
   as_gt() %>% 
@@ -634,7 +634,7 @@ pre_post_01 %>%
                            oxy_factor_change_absolute ~ 'Change during proning session',
                            oxy_factor_retain_absolute ~ 'Change relative to before proning')) %>% 
   add_ci(pattern = '{stat} ({ci})') %>% 
-  add_p() %>% 
+  add_p(everything() ~'aov') %>% 
   modify_header(label ~ md('**Patient position**')) %>% 
   modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
   as_gt() %>% 
@@ -736,7 +736,7 @@ pre_post_01 %>%
                            aa_paco2_change_absolute ~ 'Change during proning session',
                            aa_paco2_retain_absolute ~ 'Change relative to before proning')) %>% 
   add_ci(pattern = '{stat} ({ci})') %>% 
-  add_p() %>% 
+  add_p(everything() ~'aov') %>% 
   modify_header(label ~ md('**Patient position**')) %>% 
   modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
   as_gt() %>% 
@@ -835,7 +835,7 @@ pre_post_01 %>%
                            pa_co2_change_absolute ~ 'Change during proning session',
                            pa_co2_retain_absolute ~ 'Change relative to before proning')) %>% 
   add_ci(pattern = '{stat} ({ci})') %>% 
-  add_p() %>% 
+  add_p(everything() ~'aov') %>% 
   modify_header(label ~ md('**Patient position**')) %>% 
   modify_spanning_header(all_stat_cols() ~ md('**28 Day Mortality**')) %>% 
   as_gt() %>% 
