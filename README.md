@@ -9,7 +9,8 @@ This repo documents several areas and avenues in which statistical analysis and 
 1. data - an analysis of the data itself, including demographics, and the wrangling process
 2. logistic regression - initial attempts to use the patient's response to the initial prone positioning session in order to quantify the patient's subsequent risk of death using a logistic regression approach
 3. gaussian naive bayes - initial attempts to use the patient's response to the initial prone positioning session in order to quantify the patient's subsequent risk of death using the Gaussian Naive Bayes algorithm
-4. retained changes - this folder documents explorations based on whether changes that happen during the prone positioning session are 'retained' after the patient is returned supine, and whether this can be used to give insigh into mortality
+4. retained changes - this folder documents explorations based on whether changes that happen during the prone positioning session are 'retained' after the patient is returned supine, and whether this can be used to give insight into mortality
+5. naive bayes - attempting to use the naive abyes classifier
 
 ## Dataset used for ML
 
