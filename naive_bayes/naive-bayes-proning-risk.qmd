@@ -25,6 +25,20 @@ bibliography: references.bib
 csl: american-medical-association.csl
 ---
 
+```{r setup}
+#| include: false
+#| warning: false
+
+set.seed(3.14)
+library(tidyverse)
+library(scorecard)
+library(rsample)
+library(recipes)
+library(yardstick)
+library(ggpubr)
+```
+
+
 # Introduction
 
 The Acute Respiratory Distress Syndrome (ARDS) was initially identified
@@ -95,10 +109,105 @@ predictions. This implies that even if a large number of features have
 relatively minor effects, their combined impact in a Bayesian model
 could be quite large.
 
-The Naive Bayes algorithm defines a simple method to apply Bayes' theorem to classification problems.
+The Naive Bayes algorithm defines a simple method to apply Bayes'
+theorem to classification problems.
 
 # Data preparation
-One of the particularities of the Naive Bayes classifier is that it cannot work directly with continuous variables. Given that most of the data that is of interest to Intensive Care physicians is continuous in nature, this proves an important problem to address. In a very general sense there are therefore two options for continuous variables; ignore and exclude them, or subdivide them into discrete categories.
+
+One of the particularities of the Naive Bayes classifier is that it
+cannot work directly with continuous variables. Given that most of the
+data that is of interest to Intensive Care physicians is continuous in
+nature, this proves an important problem to address. In a very general
+sense there are therefore two options for continuous variables; ignore
+and exclude them, or subdivide them into discrete categories.
+
+## Binning discrete variables
+One common method of binning variables is to divide them into quartiles, but this arbitrary subdivision risks ignoring important areas of note within the data. A better approach is to use 'Weight Of Evidence (WOE)' binning to identify more significant areas within the data that are tied to predicting an outcome.
+
+Our initial attempt will use the `scorecard` package. This initial attempt essentially treats developing a Naive Bayes algorithm for mortality in ARDS as analagous to creating a 'credit score' predicting how likely someone is to default on a loan.
+
+```{r import-and-refine}
+#| include: false
+#| warning: false
+
+# variables refined according to investigations in 'explorations-and-tests.R'
+
+load(file = '../data/pre_post_changes.Rda')
+pre_post_01_refined <- pre_post_changes %>% 
+  filter(proning_session == 1) %>% 
+  select(patient_id,
+         age_years,
+         ards_type,
+         pfr_change_absolute,
+         aa_gradient_paco2_supine,
+         aa_paco2_change_absolute,
+         urea_supine,
+         pcre_supine,
+         platelet_count_supine,
+         mortality_28)
+  
+rm(pre_post_changes)
+```
+
+Initial explorations were performed, investigating variables recorded for each patient. These experiments sought to identify those variables where there was a statistically significant difference in the mean values between patients who were and were not alive 28 days following the episode of prone positioning. The result is a mix of values that changed throughout the duration of prone positioning, with some baseline values at the start of the session.
+
+- age_years
+- pf_ratio_supine
+- pfr_change_absolute
+- aa_paco2_change_absolute
+- urea_supine
+- pcre_supine
+- platelet_count_supine
+
+We will perform a train/test split initially, and use k-fold cross validation. We will use 5 folds.
+
+```{r k-folds}
+#| warning: false
+#| include: false
+
+folds <- 5
+data_folded <- pre_post_01_refined %>% vfold_cv(v = folds, repeats = 2, strata = mortality_28)
+rm(folds)
+```
+
+We will select 
+
+```{r}
+#| warning: false
+#| eval: true
+#| include: false
+#| fig-width: 5
+#| fig-align: center
+#| fig-cap: binning of pfr
+
+bins = woebin(pre_post_01_refined[, c('age_years', 
+                                      'pfr_change_absolute', 
+                                      'aa_paco2_change_absolute',
+                                      'urea_supine',
+                                      'pcre_supine',
+                                      'platelet_count_supine',
+                                      'mortality_28')], 
+              y = 'mortality_28', 
+              positive = 'T', 
+              bin_num_limit = 7)
+
+```
+
+```{r}
+#| include: true
+#| warning: false
+#| echo: false
+#| fig-width: 5
+#| fig-align: center
+#| layout-ncol: 1
+#| layout-nrow: 2
+
+woebin_plot(bins$pfr_change_absolute)$pfr_change_absolute
+woebin_plot(bins$platelet_count_supine)$platelet_count_supine
+
+```
+
+
 
 \newpage
 
