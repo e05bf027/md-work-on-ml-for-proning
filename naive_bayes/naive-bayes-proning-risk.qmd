@@ -1,0 +1,105 @@
+---
+title: "Naive Bayes and proning"
+author: "David M. Hannon"
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    linestretch: 1.15
+    mainfont: 'IBM Plex Serif'
+    sansfont: 'IBM Plex Serif'
+    fontsize: 7pt
+    # header-includes:
+      # - \usepackage[document]{ragged2e} 
+    toc: false
+    number-sections: false
+    geometry: 
+    - top=30mm
+    - bottom=25mm
+    - left=30mm
+    - right=30mm
+editor: 
+  markdown: 
+    wrap: 72
+bibliography: references.bib
+csl: american-medical-association.csl
+---
+
+# Introduction
+
+The Acute Respiratory Distress Syndrome (ARDS) was initially identified
+as a clinical entity in the 1960s[@ashbaugh1967]. ARDS consists of
+diffuse alveolar damage due to the activation of alveolar macrophages to
+release pro-inflammatory cytokines[@martin1999] that attract neutrophils
+to the lungs where they damage the alveolar and capillary epithelium by
+release of toxic mediators. This leads to the alveoli being filled with
+bloody, proteinaceous fluid. Consequently, the surfactant can no longer
+support the alveoli[@ware2001]. The end result is that these damaged
+alveoli lead to impaired gas exchange, which is the pathophysiolgic
+hallmark of ARDS.
+
+Patients with certain clinical conditions are at higher risk for
+developing ARDS. These can broadly be grouped into direct lung injury
+risk factors like pneumonia, aspiration, pulmonary contusion,
+inhalational injury, near drowning etc. (heretofore referred to as
+'ARDSp') and indirect lung injury risk factors such as sepsis,
+non-thoracic injuries/hemorrhagic shock, pancreatitis, burns,
+drugs/toxins, blood transfusions, cardiopulmonary bypass and reperfusion
+injury after lung transplant or embolectomy (which will now be referred
+to as 'ARDSexp')[@thompson2017]. Severe lung injury secondary to
+Covid-19 has certain unique features, and has been termed
+'C-ARDS'[@gattinoni2020].
+
+To date, there are no specific drugs or therapies available to directly
+treat/prevent ARDS. Mechanical ventilation that aims to protect injured
+lungs and minimize Ventilator Induced Lung Injury (VILI), and management
+of refractory hypoxaemia, are the keystones in supportive management of
+ARDS[@fan2017]. Part of the above can include placing a patient in the
+prone (i.e. 'face down') position. This was first described as a therapy
+for ARDS in the 1970s[@piehl1976]. The mechanism by which prone
+positioning improves oxygenation is multifactorial. It reduces the
+ventral to dorsal transpulmonary pressure difference,
+ventilation-perfusion mismatch and lung compression[@cornejo2013;
+@jozwiak2013]. Other potential physiological effects of prone
+positioning include a decrease in proinflammatory cytokines and
+improvement in right ventricle dysfunction by preserving pulmonary
+circulation[@guérin2014].
+
+The first prospective randomized control trial (known as the 'PROSEVA'
+trial) that showed a mortality benefit from prolonged prone positioning
+was conducted in France and published in 2013[@guérin2013]. Prone
+positioning for at least 12 to 16 hours per day, while administering low
+tidal volumes (4-6ml/kg of ideal body weight), is now strongly
+recommended in ventilated patients with severe ARDS[@banavasi2021].
+
+Many questions regarding the utility and efficacy of the prone position
+remain. An important issue lies in identifying patients who, although
+they fit the criteria to undergo prone positioning, are unlikely to
+receive a mortality benefit and in whom other therapies may be
+effective[@kawakami2022].
+
+# The Naive Bayes Classifier
+
+The basic statistical ideas necessary to understand the Naive Bayes
+algorithm have existed for centuries. The technique descended from the
+work of the 18th century mathematician Thomas Bayes, who developed
+foundational principles for describing the probability of events and how
+probabilities should be revised in light of additional information.
+
+Typically, Bayesian classifiers are best applied to problems in which th
+information from numerous attributes should be considered simultaneously
+in order to estimate the overall probability of an outcome. While many
+machine learning algorithms ignore features that have weak effects,
+Bayesian methods utilize all available evidence to subtly change the
+predictions. This implies that even if a large number of features have
+relatively minor effects, their combined impact in a Bayesian model
+could be quite large.
+
+The Naive Bayes algorithm defines a simple method to apply Bayes' theorem to classification problems.
+
+# Data preparation
+One of the particularities of the Naive Bayes classifier is that it cannot work directly with continuous variables. Given that most of the data that is of interest to Intensive Care physicians is continuous in nature, this proves an important problem to address. In a very general sense there are therefore two options for continuous variables; ignore and exclude them, or subdivide them into discrete categories.
+
+\newpage
+
+# References
