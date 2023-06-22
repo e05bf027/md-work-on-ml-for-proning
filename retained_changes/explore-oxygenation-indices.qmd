@@ -10,7 +10,7 @@ format:
     sansfont: 'IBM Plex Serif'
     fontsize: 7pt
     # header-includes:
-      # - \usepackage[document]{ragged2e} LEFT ALIGN
+      # - \usepackage[document]{ragged2e} 
     toc: false
     number-sections: false
     geometry: 
@@ -29,11 +29,13 @@ csl: american-medical-association.csl
 #| include: false
 
 library(tidyverse)
+library(plotrix)  # for standard error of the mean (SEM)
 library(readxl)
 library(janitor)
 library(gt)
 library(gtsummary)
 library(reshape2)
+library(ggsci)
 ```
 
 # Introduction
@@ -248,8 +250,9 @@ it is given below.
 
 $$ {P/F \ ratio} = \frac {PaO_2}{FiO_2} $$
 
-```{r pfr_graphs}
+```{r pfr_boxplots}
 #| include: false
+#| warning: false
 
 # pf ratio at certain positions
 pre_post_01 %>% 
@@ -266,6 +269,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'PFR', limits = c(0, 70)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light() +
   theme(legend.position = 'none')
 
@@ -285,6 +289,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'PFR', limits = c(-20, 55)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light()
 
 ggsave('pfr_changes.png', path = '../images')
@@ -301,7 +306,7 @@ mortality from the patients initial session of prone positioning.
 
 ![PFR changes](../images/pfr_changes.png){#fig-pfr_changes}
 
-PF ratio around initial session of prone positioning
+PF ratio distributions around initial session of prone positioning
 :::
 
 ```{r pfr_table}
@@ -336,8 +341,89 @@ pre_post_01 %>%
 The table below shows the mean and 95% confidence intervals for the
 patients in the study.
 
-![Response of PFR to initial session of prone
-positioning](../images/pfr_table.png){fig-align="center" width="10cm"}
+![Response of PFR to initial session of prone positioning](../images/pfr_table.png){fig-align="center" width="10cm"}
+
+\newpage
+
+Finally, a graph depicting the mean ± 95% confidence intervals is shown,
+given that there is a statistically significant differences in the
+means.
+
+```{r pfr_mean_ci}
+#| include: false
+#| warning: false
+
+# PFR with 95% CI for set positions
+pre_post_01 %>% 
+  select(pf_ratio_supine,
+         pf_ratio_prone,
+         pf_ratio_supine_post,
+         mortality_28) %>% 
+  rename('PFR (pre-prone)' = pf_ratio_supine,
+         'PFR (end of proning)' = pf_ratio_prone,
+         'PFR (post-prone)' = pf_ratio_supine_post) %>%
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  group_by(variable, mortality_28) %>% 
+  summarise(mean = mean(value),
+            se = std.error(value),
+            ci_95_min = mean - (1.96 * se),
+            ci_95_max = mean + (1.96 * se)) %>%
+  ggplot(aes(x = variable, y = mean, col = mortality_28)) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  geom_errorbar(aes(ymin = ci_95_min,
+                    ymax = ci_95_max),
+                width = 0.2,
+                position = position_dodge(width = 0.3)) +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'PF ratio', limits = c(10, 35)) +
+  labs(col = '28-day mortality', 
+       caption = 'Mean value with 95% confidence intervals displayed') +
+  scale_color_jama() +
+  theme_light() +
+  theme(legend.position = 'none')
+
+ggsave('pfr_pos_mean_ci.png', path = '../images')
+
+
+# PFR with 95% CI for changes
+pre_post_01 %>% 
+  select(pfr_change_absolute,
+         pfr_retain_absolute,
+         mortality_28) %>% 
+  rename('Change during proning' = pfr_change_absolute,
+         'Value relative to baseline' = pfr_retain_absolute) %>%
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  group_by(variable, mortality_28) %>% 
+  summarise(mean = mean(value),
+            se = std.error(value),
+            ci_95_min = mean - (1.96 * se),
+            ci_95_max = mean + (1.96 * se)) %>%
+  ggplot(aes(x = variable, y = mean, col = mortality_28)) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  geom_errorbar(aes(ymin = ci_95_min,
+                    ymax = ci_95_max),
+                width = 0.2,
+                position = position_dodge(width = 0.3)) +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'PF ratio', limits = c(0, 20)) +
+  labs(col = '28-day mortality',
+       caption = 'Mean value with 95% confidence intervals displayed') +
+  scale_color_jama() +
+  theme_light()
+
+ggsave('pfr_change_mean_ci.png', path = '../images')
+```
+
+\
+
+::: {#fig-pfr_mean_ci layout-ncol="2"}
+![Mean PFR by position](../images/pfr_pos_mean_ci.png){#fig-pfr_mean_ci} 
+
+![Mean PFR changes](../images/pfr_change_mean_ci.png){#fig-pfr_changes_mean_ci}
+
+Mean PF ratios with confidence intervals
+:::
+
 
 \newpage
 
@@ -371,6 +457,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'VR', limits = c(0, 10)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light() +
   theme(legend.position = 'none')
 
@@ -390,6 +477,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'VR', limits = c(-2.5, 3.5)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light()
 
 ggsave('vr_changes.png', path = '../images')
@@ -453,8 +541,7 @@ for ECMO.
 
 \
 
-$$ Oxygenation \ index = \frac{FiO_2 \times P_{AW}}{PaO_2}  $$
-\
+$$ Oxygenation \ index = \frac{FiO_2 \times P_{AW}}{PaO_2}  $$\
 
 ```{r oi_graphs}
 #| include: false
@@ -474,6 +561,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'O2 index', limits = c(0, 2)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light() +
   theme(legend.position = 'none') 
 
@@ -493,6 +581,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'O2 Index', limits = c(-1, 1)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light()
 
 ggsave('oi_changes.png', path = '../images')
@@ -548,12 +637,13 @@ positioning](../images/oi_table.png){fig-align="center" width="10cm"}
 \newpage
 
 ## Oxygenation factor
-This index is similar to the above, and is essentially the PF ratio normalised for the mean airway pressure at the time of measure.
+
+This index is similar to the above, and is essentially the PF ratio
+normalised for the mean airway pressure at the time of measure.
 
 \
 
-$$ Oxygenation \ factor = \frac{PF \ ratio}{P_{AW}}  $$
-\
+$$ Oxygenation \ factor = \frac{PF \ ratio}{P_{AW}}  $$\
 
 ```{r of_graphs}
 #| include: false
@@ -574,6 +664,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'O2 Factor', limits = c(-5, 50)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light() +
   theme(legend.position = 'none') 
 
@@ -596,6 +687,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'O2 Factor', limits = c(-5, 50)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light()
 
 ggsave('of_changes.png', path = '../images')
@@ -651,9 +743,11 @@ positioning](../images/of_table.png){fig-align="center" width="10cm"}
 
 \newpage
 
-
 ## A-a O~2~ gradient
-This calculation allows one to broadly determine the source of hypoxaemia in a patient. It also acts as an imperfect surrogate to measure the magnitude of shunt
+
+This calculation allows one to broadly determine the source of
+hypoxaemia in a patient. It also acts as an imperfect surrogate to
+measure the magnitude of shunt
 
 \
 
@@ -679,6 +773,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'PFR', limits = c(0, 80)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light() +
   theme(legend.position = 'none')
 
@@ -698,6 +793,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'PFR', limits = c(-70, 25)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light()
 
 ggsave('aa_grad_changes.png', path = '../images')
@@ -714,7 +810,6 @@ mortality from the patients initial session of prone positioning.
 
 A-a gradient around initial session of prone positioning
 :::
-
 
 ```{r aa_grad_table}
 #| include: false
@@ -748,18 +843,98 @@ pre_post_01 %>%
 The table below shows the mean and 95% confidence intervals for the
 patients in the study.
 
-![Response of A-a O2 gradient to initial session of prone
-positioning](../images/aa_grad_table.png){fig-align="center" width="10cm"}
+![Response of A-a O2 gradient to initial session of prone positioning](../images/aa_grad_table.png){fig-align="center"
+width="10cm"}
 
+\newpage
+
+Given the statistically significant difference in the means shown in the preceding table, a graph showing the means ± 95% confidence intervals is shown below.
+
+```{r aag_mean_ci}
+#| include: false
+#| warning: false
+
+# A-a grad with 95% CI for set positions
+pre_post_01 %>% 
+  select(aa_gradient_paco2_supine,
+         aa_gradient_paco2_prone,
+         aa_gradient_paco2_supine_post,
+         mortality_28) %>% 
+  rename('A-a gradient (pre-prone)' = aa_gradient_paco2_supine,
+         'A-a gradient (end of proning)' = aa_gradient_paco2_prone,
+         'A-a gradient (post-prone)' = aa_gradient_paco2_supine_post) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  group_by(variable, mortality_28) %>% 
+  summarise(mean = mean(value),
+            se = std.error(value),
+            ci_95_min = mean - (1.96 * se),
+            ci_95_max = mean + (1.96 * se)) %>%
+  ggplot(aes(x = variable, y = mean, col = mortality_28)) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  geom_errorbar(aes(ymin = ci_95_min,
+                    ymax = ci_95_max),
+                width = 0.2,
+                position = position_dodge(width = 0.3)) +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'A-a gradient', limits = c(10, 70)) +
+  labs(col = '28-day mortality', 
+       caption = 'Mean value with 95% confidence intervals displayed') +
+  scale_color_jama() +
+  theme_light() +
+  theme(legend.position = 'none')
+
+ggsave('aag_pos_mean_ci.png', path = '../images')
+
+
+# A-a grad with 95% CI for changes
+pre_post_01 %>% 
+  select(aa_paco2_change_absolute,
+         aa_paco2_retain_absolute,
+         mortality_28) %>% 
+  rename('Change during proning' = aa_paco2_change_absolute,
+         'Value relative to baseline' = aa_paco2_retain_absolute) %>% 
+  melt(id.vars = 'mortality_28', na.rm = T) %>% 
+  group_by(variable, mortality_28) %>% 
+  summarise(mean = mean(value),
+            se = std.error(value),
+            ci_95_min = mean - (1.96 * se),
+            ci_95_max = mean + (1.96 * se)) %>%
+  ggplot(aes(x = variable, y = mean, col = mortality_28)) +
+  geom_point(position = position_dodge(width = 0.3)) +
+  geom_errorbar(aes(ymin = ci_95_min,
+                    ymax = ci_95_max),
+                width = 0.2,
+                position = position_dodge(width = 0.3)) +
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = 'A-a gradient', limits = c(-40, 0)) +
+  labs(col = '28-day mortality',
+       caption = 'Mean value with 95% confidence intervals displayed') +
+  scale_color_jama() +
+  theme_light()
+
+ggsave('aag_change_mean_ci.png', path = '../images')
+```
+\
+
+::: {#fig-aag_mean_ci layout-ncol="2"}
+![Mean A-a gradient by position](../images/aag_pos_mean_ci.png){#fig-pfr_mean_ci} 
+
+![Mean A-a gradient changes](../images/aag_change_mean_ci.png){#fig-pfr_changes_mean_ci}
+
+Mean A-a gradients with confidence intervals
+:::
 
 \newpage
 
 # Other
-There has been a suggestion that the response of PaCO2 to the prone position can be related to mortality. 
+
+There has been a suggestion that the response of PaCO2 to the prone
+position can be related to mortality.
 
 ## PaCO2
 
-This value is measured directly from the ABG, and there is no formula for its calculation.
+This value is measured directly from the ABG, and there is no formula
+for its calculation.
 
 ```{r paco2_graphs}
 #| include: false
@@ -779,6 +954,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'PaCO2', limits = c(2.5, 15)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light() +
   theme(legend.position = 'none')
 
@@ -798,6 +974,7 @@ pre_post_01 %>%
   scale_x_discrete(name = '') +
   scale_y_continuous(name = 'PaCO2', limits = c(-7.5, 5)) +
   labs(col = '28-day mortality') +
+  scale_color_jama() +
   theme_light()
 
 ggsave('paco2_changes.png', path = '../images')
@@ -808,7 +985,8 @@ distribution of the data. It shows the data separated by 28 day
 mortality from the patients initial session of prone positioning.
 
 ::: {#fig-paco2 layout-ncol="2"}
-![O2 index by position](../images/paco2_position.png){#fig-paco2_position}
+![O2 index by
+position](../images/paco2_position.png){#fig-paco2_position}
 
 ![O2 index changes](../images/paco2_changes.png){#fig-paco2_changes}
 
@@ -854,13 +1032,26 @@ positioning](../images/paco2_table.png){fig-align="center" width="10cm"}
 
 # Impressions
 
-There appears to be a strong difference in how measures of oxygenation change in response to the patient being placed in the prone position between patients who survive and who die within 28 days of the proning procedure. This appears especially strong for PF ratio, and for A-a O2 gradient. It is weakest for Ventilatory Ratio.
+There appears to be a strong difference in how measures of oxygenation
+change in response to the patient being placed in the prone position
+between patients who survive and who die within 28 days of the proning
+procedure. This appears especially strong for PF ratio, and for A-a O2
+gradient. It is weakest for Ventilatory Ratio.
 
-Conversely, there seems to be signal that is much weaker regarding PaCO2. Whilst there are strong differences between groups who did and did not die at 28 days post proning, there appeared to be a much less significant difference when it came to measuring how much PaCO2 changed over the course of a session of prone positioning, or when the degree to which this change is maintained was calculated.
+Conversely, there seems to be signal that is much weaker regarding
+PaCO2. Whilst there are strong differences between groups who did and
+did not die at 28 days post proning, there appeared to be a much less
+significant difference when it came to measuring how much PaCO2 changed
+over the course of a session of prone positioning, or when the degree to
+which this change is maintained was calculated.
 
-The two largest groups of pathology within the study population are Covid-19 and ARDSp. It might be interesting to see if the observed significant differences are different between these groups.
+The two largest groups of pathology within the study population are
+Covid-19 and ARDSp. It might be interesting to see if the observed
+significant differences are different between these groups.
 
-In conclusion, changes in indices of oxygenation around the initial session of prone positioning appeared to be strongly associated with 28 day mortality, while changes in PaCO2 did not.
+In conclusion, changes in indices of oxygenation around the initial
+session of prone positioning appeared to be strongly associated with 28
+day mortality, while changes in PaCO2 did not.
 
 \newpage
 
