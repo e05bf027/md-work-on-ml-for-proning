@@ -139,7 +139,6 @@ pre_post_01_refined <- pre_post_changes %>%
          age_years,
          ards_type,
          pfr_change_absolute,
-         aa_gradient_paco2_supine,
          aa_paco2_change_absolute,
          urea_supine,
          pcre_supine,
@@ -170,7 +169,9 @@ data_folded <- pre_post_01_refined %>% vfold_cv(v = folds, repeats = 2, strata =
 rm(folds)
 ```
 
-We will select 
+We will select fold 1, and examine how these should be binned.
+
+\
 
 ```{r}
 #| warning: false
@@ -178,18 +179,19 @@ We will select
 #| include: false
 #| fig-width: 5
 #| fig-align: center
-#| fig-cap: binning of pfr
 
-bins = woebin(pre_post_01_refined[, c('age_years', 
-                                      'pfr_change_absolute', 
-                                      'aa_paco2_change_absolute',
-                                      'urea_supine',
-                                      'pcre_supine',
-                                      'platelet_count_supine',
-                                      'mortality_28')], 
+training_fold <- data_folded$splits[[1]] %>% training()
+
+bins = woebin(training_fold[, c('age_years', 
+                                'pfr_change_absolute', 
+                                'aa_paco2_change_absolute',
+                                'urea_supine',
+                                'pcre_supine',
+                                'platelet_count_supine',
+                                'mortality_28')], 
               y = 'mortality_28', 
               positive = 'T', 
-              bin_num_limit = 7)
+              bin_num_limit = 5)
 
 ```
 
@@ -203,7 +205,7 @@ bins = woebin(pre_post_01_refined[, c('age_years',
 #| layout-nrow: 2
 
 woebin_plot(bins$pfr_change_absolute)$pfr_change_absolute
-woebin_plot(bins$platelet_count_supine)$platelet_count_supine
+woebin_plot(bins$age_years)$age_years
 
 ```
 
