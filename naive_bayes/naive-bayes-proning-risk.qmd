@@ -38,7 +38,6 @@ library(yardstick)
 library(ggpubr)
 ```
 
-
 # Introduction
 
 The Acute Respiratory Distress Syndrome (ARDS) was initially identified
@@ -122,9 +121,17 @@ sense there are therefore two options for continuous variables; ignore
 and exclude them, or subdivide them into discrete categories.
 
 ## Binning discrete variables
-One common method of binning variables is to divide them into quartiles, but this arbitrary subdivision risks ignoring important areas of note within the data. A better approach is to use 'Weight Of Evidence (WOE)' binning to identify more significant areas within the data that are tied to predicting an outcome.
 
-Our initial attempt will use the `scorecard` package. This initial attempt essentially treats developing a Naive Bayes algorithm for mortality in ARDS as analagous to creating a 'credit score' predicting how likely someone is to default on a loan.
+One common method of binning variables is to divide them into quartiles,
+but this arbitrary subdivision risks ignoring important areas of note
+within the data. A better approach is to use 'Weight Of Evidence (WOE)'
+binning to identify more significant areas within the data that are tied
+to predicting an outcome.
+
+Our initial attempt will use the `scorecard` package. This initial
+attempt essentially treats developing a Naive Bayes algorithm for
+mortality in ARDS as analagous to creating a 'credit score' predicting
+how likely someone is to default on a loan.
 
 ```{r import-and-refine}
 #| include: false
@@ -138,27 +145,41 @@ pre_post_01_refined <- pre_post_changes %>%
   select(patient_id,
          age_years,
          ards_type,
+         pf_ratio_supine,
          pfr_change_absolute,
+         aa_gradient_paco2_supine,
          aa_paco2_change_absolute,
          urea_supine,
          pcre_supine,
+         albumin_supine,
+         total_haemoglobin_supine,
+         white_cell_count_supine,
+         c_reactive_protein_supine,
+         lactate_abg_supine,
          platelet_count_supine,
          mortality_28)
   
 rm(pre_post_changes)
 ```
 
-Initial explorations were performed, investigating variables recorded for each patient. These experiments sought to identify those variables where there was a statistically significant difference in the mean values between patients who were and were not alive 28 days following the episode of prone positioning. The result is a mix of values that changed throughout the duration of prone positioning, with some baseline values at the start of the session.
+Initial explorations were performed, investigating variables recorded
+for each patient. These experiments sought to identify those variables
+where there was a statistically significant difference in the mean
+values between patients who were and were not alive 28 days following
+the episode of prone positioning. The result is a mix of values that
+changed throughout the duration of prone positioning, with some baseline
+values at the start of the session.
 
-- age_years
-- pf_ratio_supine
-- pfr_change_absolute
-- aa_paco2_change_absolute
-- urea_supine
-- pcre_supine
-- platelet_count_supine
+-   age_years
+-   pf_ratio_supine
+-   pfr_change_absolute
+-   aa_paco2_change_absolute
+-   urea_supine
+-   pcre_supine
+-   platelet_count_supine
 
-We will perform a train/test split initially, and use k-fold cross validation. We will use 5 folds.
+We will perform a train/test split initially, and use k-fold cross
+validation. We will use 5 folds.
 
 ```{r k-folds}
 #| warning: false
@@ -183,16 +204,23 @@ We will select fold 1, and examine how these should be binned.
 training_fold <- data_folded$splits[[1]] %>% training()
 
 bins = woebin(training_fold[, c('age_years', 
+                                'pf_ratio_supine',
                                 'pfr_change_absolute', 
+                                'aa_gradient_paco2_supine',
                                 'aa_paco2_change_absolute',
                                 'urea_supine',
                                 'pcre_supine',
+                                'total_haemoglobin_supine',
                                 'platelet_count_supine',
+                                'albumin_supine',
+                                'white_cell_count_supine',
+                                'c_reactive_protein_supine',
+                                'lactate_abg_supine',
                                 'mortality_28')], 
               y = 'mortality_28', 
               positive = 'T', 
-              bin_num_limit = 5)
-
+              bin_num_limit = 7,
+              save_breaks_list = 'breaks_fold_1')
 ```
 
 ```{r}
@@ -205,11 +233,8 @@ bins = woebin(training_fold[, c('age_years',
 #| layout-nrow: 2
 
 woebin_plot(bins$pfr_change_absolute)$pfr_change_absolute
-woebin_plot(bins$age_years)$age_years
 
 ```
-
-
 
 \newpage
 
