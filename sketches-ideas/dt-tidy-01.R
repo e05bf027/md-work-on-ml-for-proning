@@ -3,8 +3,6 @@
 
 
 # setup
-rm(list = ls())
-
 set.seed(3.14)
 library(tidyverse)
 library(tidymodels)
@@ -27,7 +25,12 @@ dt_v_fold <-
 # make recipe
 c5_recipe <-
   recipe(prone_session_1, formula = mortality_28 ~ .,) %>% 
-  step_rm(patient_id, bmi) %>% 
+  step_rm(patient_id,
+          bmi, 
+          fi_o2_supine, 
+          time_between_abg, 
+          pa_o2_supine,
+          minute_volume_coalesced_supine) %>% 
   step_zv(all_predictors()) %>% 
   step_dummy(all_factor_predictors()) %>% 
   step_corr(all_numeric_predictors() , threshold = 0.8)
@@ -38,12 +41,12 @@ c5_mod <-
   C5_rules(mode = 'classification', 
            engine = 'C5.0', 
            trees = tune(), 
-           min_n = tune()) 
+           min_n = tune())
 
 
 # create tuning grid
 dt_param <- extract_parameter_set_dials(c5_mod)
-dt_grid <- grid_regular(trees(),
+dt_grid <- grid_regular(trees(range = c(1, 100)),
                         min_n(), 
                         levels = 10)
 
