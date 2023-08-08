@@ -1,0 +1,84 @@
+---
+title: "Predicting 28-day mortality from the response to an initial session of prone positioning in intubated patients"
+author: "David M. Hannon"
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    linestretch: 1.15
+    mainfont: 'IBM Plex Serif'
+    sansfont: 'IBM Plex Serif'
+    fontsize: 7pt
+    include-in-header: 
+      text: |
+        \usepackage{booktabs}
+        \usepackage{siunitx}
+        \usepackage{multirow}
+    toc: false
+    number-sections: false
+    geometry: 
+    - top=30mm
+    - bottom=25mm
+    - left=30mm
+    - right=30mm
+editor: 
+  markdown: 
+    wrap: 72
+bibliography: references.bib
+csl: american-medical-association.csl
+---
+
+# Introduction
+
+I will just play with some units here.
+
+\num{123}
+
+\ang{120}
+
+\num{32}\unit{kg.m/s^2}
+
+# Figures
+
+Now a little play with figures.
+
+![Prone positioning](images/prone_01.jpg){fig-pos="ht"
+fig-align="center" fig-env="figure" width="75mm"}
+
+# Tables
+
+```{=latex}
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{lllll}
+        \toprule
+        \multirow{2}{*}[-1em]{Models} & \multicolumn{3}{c}{Metric 1} & Metric 2\\
+        \addlinespace[10pt]
+        \cmidrule(lr){2-4} \cmidrule(lr){5-5} \\
+        {} & precision & recall & F-score  & R@10 \\
+        \midrule
+        model 1 & 0.67  & 0.8 & 0.729  & 0.75 \\
+        model 2 & 0.8 & 0.9 & 0.847 & 0.85 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Gravimetric analysis of silver halides in a 1.27-mL sample of sea water.}
+\end{table}
+```
+
+```{=latex}
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{lllll}
+        \toprule
+        \multirow{2}{*}[-1em]{Models} & \multicolumn{3}{c}{Metric 1} & Metric 2\\
+        \addlinespace[10pt]
+        \cmidrule(lr){2-4} \cmidrule(lr){5-5} \\
+        {} & precision & recall & F-score  & R@10 \\
+        \midrule
+        model 1 & 0.67  & 0.8 & 0.729  & 0.75 \\
+        model 2 & 0.8 & 0.9 & 0.847 & 0.85 \\
+        \bottomrule
+    \end{tabular}
+    \caption{second}
+\end{table}
+```
