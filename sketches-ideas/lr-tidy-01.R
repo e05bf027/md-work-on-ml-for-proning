@@ -30,21 +30,11 @@ lr_recipe <-
           weight_kg) %>% 
   step_dummy(all_factor_predictors(), -mortality_28) %>% 
   step_impute_bag(all_predictors()) %>% 
+  step_corr(all_numeric_predictors(), threshold = 0.8) %>% 
   step_zv()
 
 
 # MODEL
-# create a model (1) - with no tuning
-lr_model_01 <- 
-  logistic_reg(mode = 'classification', 
-               engine = 'glm')
-
-# create a glmnet model with NO tuning
-lr_model_02 <- 
-  logistic_reg(mode = 'classification',
-               engine = 'glmnet') %>% 
-  set_args(maxit=1e+06)
-
 # create a glmnet model with tuning
 lr_model_03 <- 
   logistic_reg(mode = 'classification',
@@ -65,6 +55,9 @@ lr_workflow <-
 lr_param <- extract_parameter_set_dials(lr_model_03)
 lr_grid <- grid_regular(penalty(range = c(-5, 3)), levels = 25)
 
+lr_tuning_grid <- 
+  grid_max_entropy(penalty(range = c(-5, 3)), size = 10)
+
 
 # run model_01
 lr_workflow <- 
@@ -72,33 +65,17 @@ lr_workflow <-
   add_model(lr_model_03) %>% 
   add_recipe(lr_recipe) %>% 
   tune_grid(resamples = lr_v_fold,
-            grid = lr_grid)
-
-
-# tune the model (not for model_01!)
-lr_results <- 
-  lr_workflow %>% 
-  tune_grid(resamples = lr_v_fold,
-            grid = lr_grid,
-            control = control_grid(save_pred = T))
+            grid = lr_tuning_grid,
+            metrics = metric_set(f_meas, 
+                                 accuracy, 
+                                 kap,
+                                 roc_auc, 
+                                 sens, 
+                                 spec))
 
 
 # overview of results
-lr_results
-lr_metrics <- collect_metrics(lr_results)
-
-
-
-# TEST FIT
-keep_pred <- control_resamples(save_pred = T, save_workflow = T)
-metrics_test_01 <- metric_set(accuracy, roc_auc, kap)
-
-test_fit <- 
-  lr_workflow %>% 
-  fit_resamples(resamples = lr_v_fold,
-                control = keep_pred)
-
-collect_metrics(test_fit)
+lr_metrics <- collect_metrics(lr_workflow)
 
 
 # PLOT
