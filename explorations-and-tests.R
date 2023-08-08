@@ -233,9 +233,3 @@ pre_post_first_exp %>%
   ggplot(aes(x = mortality_28, y = albumin_supine)) +
   geom_boxplot(notch = T, na.rm = T, outlier.colour = 'red') +
   theme_light()
-
-
-
-
-
-
