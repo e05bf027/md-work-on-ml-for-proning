@@ -26,7 +26,6 @@ csl: american-medical-association.csl
 ```{r setup}
 #| include: false
 
-rm(list = ls())
 library(recipes)
 library(rsample)
 library(tidyverse)
@@ -120,8 +119,12 @@ ICU admission. 10-fold cross validation is used.
 load('../data/pre_post_changes.Rda')
 
 # split to folds
-folds <- 5
-prone_sess_folds <- pre_post_changes %>% vfold_cv(v = folds, strata = outcome)
+folds <- 25
+prone_sess_folds <- 
+  pre_post_changes %>% 
+  vfold_cv(v = sqrt(folds), 
+           repeats = sqrt(folds), 
+           strata = outcome)
 
 # create recipe
 prone_sess_recipe <- recipe(outcome ~ ., data = pre_post_changes) %>% 
