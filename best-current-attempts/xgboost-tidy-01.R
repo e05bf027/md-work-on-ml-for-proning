@@ -82,7 +82,9 @@ xgb_results <-
                                  kap,
                                  roc_auc, 
                                  sens, 
-                                 spec)
+                                 spec,
+                                 ppv,
+                                 npv)
   )
 
 
